@@ -137,7 +137,7 @@ Video does not go over the WebSocket: each device has an MJPEG endpoint `/video/
 
 ## Work split
 
-Five workstreams. Each one has a stub-first start, so everyone is productive from the first hour.
+The claimable, task-level list is [`backend/TASKS.md`](https://github.com/eddii1/grok_hackathon_backend/blob/main/TASKS.md). Five workstreams. Each one has a stub-first start, so everyone is productive from the first hour.
 
 | # | Workstream | Delivers | First hour |
 |---|---|---|---|
