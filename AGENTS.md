@@ -8,6 +8,10 @@ Building our own idea (not one of the tracks): a fleet command platform where an
 
 `backend/` and `frontend/` are git submodules, each its own repo. Commit and push inside the submodule first, then commit the updated pointer in this repo; a parent commit made before the submodule push points at a commit nobody else can fetch.
 
+## Working rules
+
+- **Be fast. Keep things minimal.** Ship the smallest thing that works for the demo; no abstractions, frameworks or tests beyond what the demo needs. Prefer one file over many.
+
 ## Tracks
 
 All tracks are "proposed" and may change. Before scoping work or writing the README, read the chosen track's full card in [`docs/tracks.md`](docs/tracks.md): it has the inputs provided, the out-of-scope list and the exact measures.
