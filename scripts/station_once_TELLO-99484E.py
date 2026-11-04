@@ -5,8 +5,8 @@ import sys
 
 DRONE = "192.168.10.1"
 PORT = 8889
-SSID = "Samsung"
-PASSWORD = "12345678m"
+SSID = "TEAM"
+PASSWORD = "12345678"
 DRONE_CODE = "TELLO-99484E"
 
 
@@ -61,3 +61,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

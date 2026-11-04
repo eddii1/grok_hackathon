@@ -27,8 +27,8 @@ CMD_PORT = 8889
 STATE_PORT = 8890
 
 # Phone hotspot (single-word SSID, WPA2-Personal)
-HOTSPOT_SSID = "Samsung"
-HOTSPOT_PASS = "12345678m"
+HOTSPOT_SSID = "TEAM"
+HOTSPOT_PASS = "12345678"
 
 MESSAGE = "HELLO"
 COLOR = "r"  # r=red, b=blue, p=purple

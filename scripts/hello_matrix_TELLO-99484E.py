@@ -13,8 +13,8 @@ CMD_PORT = 8889
 STATE_PORT = 8890
 
 # Phone hotspot
-HOTSPOT_SSID = "Samsung"
-HOTSPOT_PASS = "12345678m"
+HOTSPOT_SSID = "TEAM"
+HOTSPOT_PASS = "12345678"
 
 MESSAGE = "HELLO"
 COLOR = "r"
@@ -151,3 +151,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
