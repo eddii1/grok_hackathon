@@ -199,7 +199,9 @@ def main():
             print(f"[Auto-detect] Found drone on LAN at: {lan_ip}")
             drone_ip = lan_ip
         else:
-            local = get_wifi_ip_to("8.8.8.8")
+            # The drone AP has no internet, so a route to 8.8.8.8 does not
+            # prove we are on it. 192.168.10.1 is on-link only on TELLO-/RMTT-.
+            local = get_wifi_ip_to(DEFAULT_DRONE_IP)
             on_drone_ap = local.startswith("192.168.10.")
             if not on_drone_ap:
                 sys.exit(
