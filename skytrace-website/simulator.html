@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Skytrace — Mission control (simulation)</title>
+<link href="https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>.sh{padding:100px 20px 60px;max-width:1180px;margin:0 auto}.g{display:grid;grid-template-columns:1fr 1.3fr;gap:16px}.stop{background:var(--red);color:#fff;border-color:var(--red);font-weight:600}.stop:hover{background:#d90030}
+#log{max-height:200px;overflow:auto}.in2{display:flex;gap:8px;margin-top:12px}.in2 input{flex:1;height:44px;border-radius:12px;border:1px solid var(--line2);background:var(--card);color:var(--fg);padding:0 14px;font:inherit;min-width:0}
+@media(max-width:900px){.g{grid-template-columns:1fr}}.hdr .btn{display:inline-flex!important}</style></head><body>
+<header class="hdr"><div class="hdr-in" style="grid-template-columns:1fr auto 1fr"><a class="logo" href="index.html"><i></i>Skytrace</a><span class="sim">SIMULATION</span><a class="btn" href="index.html">Back to site</a></div></header>
+<main class="sh"><div>
+<p class="sub" style="margin:0 0 24px;max-width:none">Simulation with local sample data. No devices are connected and no API is called.</p>
+<div class="g">
+<div class="win"><div class="wbar"><i></i><i></i><i></i><span>fleet · simulated</span></div><div class="wb">
+<div class="row"><span>drone-1 <small>simulated RoboMaster TT</small></span><span class="tag y" id="s1">LANDED</span></div>
+<div class="row"><span>drone-2 <small>simulated</small></span><span class="tag y">IDLE</span></div>
+<div class="frame" style="margin-top:14px"><div class="box" id="bx1" style="left:12%;top:30%;width:16%;height:50%;display:none"><em>1</em></div><div class="box" id="bx3" style="left:44%;top:26%;width:18%;height:56%;display:none"><em>3</em></div><div class="box" style="display:none"></div></div>
+<button class="btn stop" id="stop" style="margin-top:14px;width:100%;justify-content:center">STOP</button></div></div>
+<div class="win"><div class="wbar"><i></i><i></i><i></i><span>chat · events</span></div><div class="wb"><div class="chat" id="chat"><div class="msg">Describe a mission, e.g. “Find the person in the red jacket and take a photo.”</div></div>
+<form class="in2" id="f"><input id="q" aria-label="Mission" placeholder="Describe the mission…"><button class="btn pri">Send</button></form>
+<div id="log" style="margin-top:16px"></div></div></div>
+</div></div></main>
+<script>
+const $=i=>document.getElementById(i),chat=$('chat'),log=$('log');
+let T=[],st='idle',mid=0;
+const say=(t,c='')=>{const d=document.createElement('div');d.className='msg '+c;d.innerHTML=t;chat.append(d);return d};
+const ev=t=>{const r=document.createElement('div');r.className='row';r.innerHTML=`<span><small class="mono">${new Date().toLocaleTimeString()}</small> ${t}</span><span class="tag y">SIM</span>`;log.prepend(r)};
+const state=(t,c)=>{$('s1').textContent=t;$('s1').className='tag '+c};
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+// a mission is live only while its id is current and the state machine is not idle
+const live=id=>id===mid&&st!=='idle';
+const after=(id,ms,fn)=>T.push(setTimeout(()=>{if(live(id))fn()},ms));
+const gate=(id,msg,label,fn)=>{const m=say(msg+` <br><button class="btn pri" style="height:34px;margin-top:8px">${label}</button>`);const b=m.querySelector('button');
+ b.onclick=()=>{if(!live(id)||b.disabled)return;b.disabled=true;b.remove();fn()};return m};
+$('f').onsubmit=e=>{e.preventDefault();const v=$('q').value.trim();if(!v||st!=='idle')return;$('q').value='';
+ const id=++mid;st='plan';$('bx1').style.display=$('bx3').style.display='none';$('bx3').classList.remove('sel');state('PLANNING','b');
+ say(esc(v),'u');ev('Mission received');
+ after(id,500,()=>gate(id,`Plan (simulated): scan the room, propose a target for “${esc(v)}”, follow, photograph, land. Assigned to <b>drone-1</b>.`,'Confirm plan',()=>{
+  st='scan';ev('Operator confirmed plan');state('SCANNING','b');
+  after(id,900,()=>{$('bx1').style.display=$('bx3').style.display='block';ev('Targets detected (sample frame)');st='target';
+   gate(id,'Grok proposes <b>box 3</b> (sample reasoning).','Confirm target',()=>{
+    st='follow';$('bx3').classList.add('sel');state('FOLLOWING','b');ev('Operator confirmed target');
+    after(id,1500,()=>{state('LANDED','y');ev('Photo captured (placeholder) · landed');say('Done. Photo saved to the sample log.');st='idle'})})})}))};
+$('stop').onclick=()=>{mid++;T.forEach(clearTimeout);T=[];chat.querySelectorAll('button').forEach(b=>{b.disabled=true;b.remove()});
+ st='idle';state('STOPPED','r');ev('STOP pressed — all pending steps cancelled');say('STOP received. Mission cancelled.')};
+</script></body></html>
