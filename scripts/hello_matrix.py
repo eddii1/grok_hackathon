@@ -24,8 +24,9 @@ DEFAULT_DRONE_IP = "192.168.10.1"
 CMD_PORT = 8889
 STATE_PORT = 8890
 
-# Target phone hotspot credentials
-HOTSPOT_SSID = "Samsung S24 Ultra "
+# Phone hotspot. The Tello `ap` command splits on spaces, so the SSID and
+# password must each be a single word. "Samsung S24 Ultra" will not join.
+HOTSPOT_SSID = "Samsung S24 Ultra"
 HOTSPOT_PASS = "12345678m"
 
 MESSAGE = "HELLO"
@@ -46,8 +47,8 @@ def get_wifi_ip_to(drone_ip):
         s.close()
 
 
-def send_cmd(sock, drone_ip, cmd, timeout=COMMAND_TIMEOUT_S):
-    print(f">> {cmd}")
+def send_cmd(sock, drone_ip, cmd, timeout=COMMAND_TIMEOUT_S, label=None):
+    print(f">> {label or cmd}")
     sock.sendto(cmd.encode("utf-8"), (drone_ip, CMD_PORT))
     sock.settimeout(timeout)
     try:
@@ -74,18 +75,24 @@ def enter_sdk_mode(sock, drone_ip):
 
 def set_station_mode(sock, drone_ip, ssid, password):
     """Instruct the drone to connect to the target Wi-Fi network."""
-    enter_sdk_mode(sock, drone_ip)
+    ssid = ssid.strip()
+    password = password.strip()
+    if (" " in ssid) or (" " in password):
+        print(
+            "[!] The drone's `ap` command cannot join a network whose name or "
+            "password contains a space.\n"
+            f"    '{ssid}' will not work. Rename the phone hotspot to one word "
+            "(for example S24Ultra), put that name in HOTSPOT_SSID, then run "
+            "this again while the PC is joined to the drone's TELLO- Wi-Fi."
+        )
+        return False
 
-    # Some Tello firmwares accept quoted SSIDs, others raw string
-    cmd = f"ap {ssid} {password}".strip()
+    if not enter_sdk_mode(sock, drone_ip):
+        return False
+
+    cmd = f"ap {ssid} {password}"
     print(f"\nInstructing drone to connect to Wi-Fi: '{ssid}'...")
-    reply = send_cmd(sock, drone_ip, cmd, timeout=4.0)
-
-    if not reply or "error" in reply.lower():
-        # Retry with quotes if SSID has spaces
-        alt_cmd = f'ap "{ssid.strip()}" {password}'
-        print(f"Retrying with alternative format: {alt_cmd}")
-        reply = send_cmd(sock, drone_ip, alt_cmd, timeout=4.0)
+    reply = send_cmd(sock, drone_ip, cmd, timeout=4.0, label=f"ap {ssid} ****")
 
     if "ok" in reply.lower() or "reboot" in reply.lower():
         print("\n[SUCCESS] Drone accepted station mode! It will reboot in ~3s and join the network.")
@@ -98,7 +105,22 @@ def set_station_mode(sock, drone_ip, ssid, password):
 
 def show_hello(sock, drone_ip, color, hold_s, loops):
     """Spell HELLO letter-by-letter on the 8x8 dot-matrix display."""
-    enter_sdk_mode(sock, drone_ip)
+    if not enter_sdk_mode(sock, drone_ip):
+        print(
+            "[!] The matrix was not changed. The drone did not answer.\n"
+            "    Join its TELLO- Wi-Fi (it is 192.168.10.1), or put it on this "
+            "same hotspot first with --sta.\n"
+            "    If TELLO- is missing, hold the drone power button for 5 seconds "
+            "until the light flashes yellow. That restores its own Wi-Fi."
+        )
+        return False
+
+    hw = send_cmd(sock, drone_ip, "hardware?", timeout=2.0)
+    if hw and "RMTT" not in hw.upper() and "TELLO" in hw.upper():
+        print(
+            "[!] hardware? did not report the TT expansion board (RMTT). "
+            "The 8x8 matrix is on that board; a plain Tello has no matrix."
+        )
 
     # Top RGB LED
     rgb = {"r": "255 0 0", "b": "0 0 255", "p": "255 0 255"}.get(color, "255 0 0")
@@ -178,6 +200,19 @@ def main():
             print(f"[Auto-detect] Found drone on LAN at: {lan_ip}")
             drone_ip = lan_ip
         else:
+            local = get_wifi_ip_to("8.8.8.8")
+            on_drone_ap = local.startswith("192.168.10.")
+            if not on_drone_ap:
+                sys.exit(
+                    "No drone answered on this network, and this PC is not on a "
+                    "TELLO- Wi-Fi.\n"
+                    "The matrix commands were not sent.\n"
+                    "Turn the drone on. If its TELLO- network does not appear, "
+                    "hold the power button for 5 seconds until the light flashes "
+                    "yellow, then join that Wi-Fi and run this again.\n"
+                    "To use the phone hotspot afterwards, rename it to one word "
+                    "with no spaces and run: python scripts/hello_matrix.py --sta"
+                )
             drone_ip = DEFAULT_DRONE_IP
 
     # Bind explicitly to the interface IP routing to the drone (prevents VPN/Tailscale hijacking)
