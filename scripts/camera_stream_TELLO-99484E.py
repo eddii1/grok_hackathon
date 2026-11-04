@@ -1,11 +1,11 @@
-"""RoboMaster TT / Tello Live Camera Stream & Broadcaster.
+"""RoboMaster TT / Tello Live Camera Stream & Broadcaster for TELLO-99484E.
 
 Decodes H.264 video streams on UDP port 11111 using PyAV and OpenCV.
 Works in both Direct AP mode (192.168.10.1) and Station Mode (local Wi-Fi).
 
 Usage:
-  python scripts/camera_stream.py
-  python scripts/camera_stream.py 10.37.75.54 10.37.75.120
+  python scripts/camera_stream_TELLO-99484E.py
+  python scripts/camera_stream_TELLO-99484E.py <LOCAL_IP> <DRONE_IP>
 """
 
 import socket
@@ -20,11 +20,11 @@ import cv2
 
 CMD_PORT = 8889
 VIDEO_PORT = 11111
+DRONE_CODE = "TELLO-99484E"
 SNAPSHOT_DIR = Path(__file__).resolve().parent.parent / "captures"
 
 
 def wifi_ipv4():
-    """Get active Wi-Fi IPv4 address, ignoring virtual tunnels."""
     try:
         out = subprocess.check_output(
             ["netsh", "interface", "ip", "show", "address", "name=Wi-Fi"],
@@ -56,12 +56,11 @@ def send_cmd(sock, drone_ip, cmd, timeout=3.0):
 
 
 def find_drone_on_lan(local_ip):
-    """Scan local /24 subnet for responding Tello drone."""
     if local_ip.startswith("192.168.10."):
         return "192.168.10.1"
 
     prefix = ".".join(local_ip.split(".")[:3]) + "."
-    print(f"Scanning local network {prefix}0/24 for drone on port 8889...", flush=True)
+    print(f"Scanning local network {prefix}0/24 for {DRONE_CODE}...", flush=True)
     found = []
     lock = threading.Lock()
 
@@ -92,7 +91,7 @@ def find_drone_on_lan(local_ip):
 
 def live_broadcast(local_ip, drone_ip):
     print(f"\n{'=' * 65}")
-    print(f"STARTING LIVE BROADCAST: Drone={drone_ip}  Local={local_ip}")
+    print(f"STARTING LIVE BROADCAST: [{DRONE_CODE}] Drone={drone_ip}  Local={local_ip}")
     print(f"{'=' * 65}\n", flush=True)
 
     cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -109,9 +108,9 @@ def live_broadcast(local_ip, drone_ip):
         video_sock.bind(("", VIDEO_PORT))
     video_sock.settimeout(1.0)
 
-    # 1. Initialize SDK mode
+    # Enter SDK mode
     ready = False
-    for attempt in range(1, 5):
+    for attempt in range(1, 6):
         reply = send_cmd(cmd_sock, drone_ip, "command", timeout=2.5)
         if "ok" in reply.lower():
             ready = True
@@ -119,21 +118,19 @@ def live_broadcast(local_ip, drone_ip):
         time.sleep(0.3)
 
     if not ready:
-        print("[!] Failed to enter SDK mode. Is the drone powered on and connected?", flush=True)
+        print(f"[!] Failed to enter SDK mode on {DRONE_CODE} ({drone_ip}).", flush=True)
         video_sock.close()
         cmd_sock.close()
         return 1
 
-    # Query battery
     bat = send_cmd(cmd_sock, drone_ip, "battery?", timeout=1.5) or "N/A"
     print(f"Drone Battery: {bat}%\n", flush=True)
 
-    # 2. Turn on video stream
+    # Enable stream
     send_cmd(cmd_sock, drone_ip, "streamon", timeout=4.0)
 
-    # 3. Create H.264 decoder and OpenCV window
     codec = av.CodecContext.create("h264", "r")
-    window_name = f"RoboMaster TT - Live Broadcasting Window [{drone_ip}]"
+    window_name = f"Tello Live Broadcast [{DRONE_CODE} | {drone_ip}]"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 960, 720)
 
@@ -144,9 +141,10 @@ def live_broadcast(local_ip, drone_ip):
     fps = 0
 
     print("=" * 65)
-    print("LIVE CAMERA WINDOW IS OPEN!")
+    print("LIVE BROADCASTING WINDOW ACTIVE")
+    print(f"  * Showing video stream from {DRONE_CODE}")
     print("  * Press 'q' or 'ESC' in the window to quit.")
-    print("  * Press 's' to capture a snapshot image.")
+    print("  * Press 's' to save snapshot image.")
     print("=" * 65 + "\n", flush=True)
 
     try:
@@ -169,10 +167,9 @@ def live_broadcast(local_ip, drone_ip):
 
                         img = frame.to_ndarray(format="bgr24")
 
-                        # Telemetry overlay
                         cv2.putText(
                             img,
-                            f"RoboMaster TT Live | Bat: {bat}% | FPS: {fps}",
+                            f"{DRONE_CODE} Live | Bat: {bat}% | FPS: {fps}",
                             (20, 35),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
@@ -199,12 +196,12 @@ def live_broadcast(local_ip, drone_ip):
                 break
             elif key == ord("s"):
                 snapshot_idx += 1
-                fn = SNAPSHOT_DIR / f"drone_snapshot_{snapshot_idx}.jpg"
+                fn = SNAPSHOT_DIR / f"{DRONE_CODE}_snapshot_{snapshot_idx}.jpg"
                 cv2.imwrite(str(fn), img)
                 print(f"[Snapshot] Saved to {fn}", flush=True)
 
     except KeyboardInterrupt:
-        print("\nStopping live broadcast...", flush=True)
+        print("\nStopping camera stream...", flush=True)
     finally:
         try:
             send_cmd(cmd_sock, drone_ip, "streamoff", timeout=2.0)
@@ -225,8 +222,7 @@ def main():
     if not drone_ip:
         drone_ip = find_drone_on_lan(local_ip) or "192.168.10.1"
 
-    print(f"Local IP: {local_ip}")
-    print(f"Drone IP: {drone_ip}")
+    print(f"[{DRONE_CODE}] Local IP: {local_ip} | Drone IP: {drone_ip}")
     return live_broadcast(local_ip, drone_ip)
 
 

@@ -4,8 +4,8 @@ Connects to the drone, enables camera streaming (streamon), and opens
 a high-framerate OpenCV desktop window with telemetry overlay.
 
 Usage:
-  python scripts/test_camera.py
-  python scripts/test_camera.py --ip 192.168.10.1
+  python scripts/test_camera_RMTT-306E2E.py
+  python scripts/test_camera_RMTT-306E2E.py --ip 192.168.10.1
 """
 
 import argparse
@@ -97,7 +97,7 @@ def main():
                 break
             elif key == ord("s") and frame is not None:
                 snapshot_idx += 1
-                filename = f"tello_capture_{snapshot_idx}.jpg"
+                filename = f"RMTT-306E2E_capture_{snapshot_idx}.jpg"
                 cv2.imwrite(filename, frame)
                 print(f"[Snapshot] Saved {filename}")
 

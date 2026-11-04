@@ -1,25 +1,22 @@
-"""Send the one-time station-mode join to the drone.
+"""Send the one-time station-mode join. Reads the hotspot secret from hello_matrix_RMTT-306E2E.py."""
 
-Connects to 192.168.10.1 and sends 'command' then 'ap Samsung 12345678m'.
-"""
-
+import re
 import socket
 import sys
+from pathlib import Path
 
+SRC = Path(__file__).with_name("hello_matrix_RMTT-306E2E.py")
+text = SRC.read_text(encoding="utf-8")
+SSID = re.search(r'HOTSPOT_SSID = "([^"]*)"', text).group(1)
+PASSWORD = re.search(r'HOTSPOT_PASS = "([^"]*)"', text).group(1)
 DRONE = "192.168.10.1"
 PORT = 8889
-SSID = "Samsung"
-PASSWORD = "12345678m"
 
 
 def main():
-    local_ip = sys.argv[1] if len(sys.argv) > 1 else "192.168.10.2"
-    print(f"Connecting to drone from local IP: {local_ip}...")
+    local_ip = sys.argv[1]
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.bind((local_ip, 0))
-    except Exception:
-        sock.bind(("", 0))
+    sock.bind((local_ip, 0))
 
     def send(cmd, timeout, label=None):
         print(f">> {label or cmd}", flush=True)
@@ -34,32 +31,34 @@ def main():
 
     try:
         ready = False
-        for i in range(1, 6):
-            print(f"Attempt {i}: Sending 'command'...")
+        for _ in range(5):
             reply = send("command", 3)
             print(f"<< {reply or '(empty)'}", flush=True)
             if "ok" in reply.lower() and "error" not in reply.lower():
                 ready = True
                 break
-
         if not ready:
-            print("STA_FAIL: Drone did not respond to 'command' in SDK mode.", flush=True)
+            print("STA_FAIL no sdk", flush=True)
             return 1
 
-        print("Querying drone status...")
-        bat = send("battery?", 2)
-        sn = send("sn?", 2)
-        print(f"Drone SN: {sn}, Battery: {bat}%")
+        stored = send("ap?", 3)
+        parts = stored.split()
+        ssid_ok = SSID in parts
+        pass_ok = PASSWORD in parts
+        print(
+            f"<< ap? stored_ssid={parts[0] if parts else '(none)'} "
+            f"ssid_match={'yes' if ssid_ok else 'no'} "
+            f"password_match={'yes' if pass_ok else 'no'}",
+            flush=True,
+        )
 
-        # Send AP command
         reply = send(f"ap {SSID} {PASSWORD}", 6, label=f"ap {SSID} ****")
         print(f"<< {reply or '(empty)'}", flush=True)
         if "ok" in reply.lower() or "reboot" in reply.lower():
-            print("STA_OK: Drone accepted Station Mode command! It will reboot onto 'Samsung'.", flush=True)
+            print("STA_OK", flush=True)
             return 0
-        else:
-            print("STA_FAIL: Drone rejected station command.", flush=True)
-            return 1
+        print("STA_FAIL", flush=True)
+        return 1
     finally:
         sock.close()
 

@@ -5,13 +5,13 @@ the drone to Wi-Fi / Hotspot (Station Mode).
 
 Usage:
   # 1. Takeoff to 1m, show HELLO on matrix, and land:
-  python scripts/hello_matrix.py --fly
+  python scripts/hello_matrix_RMTT-306E2E.py --fly
 
   # 2. Show 'HELLO' on desk without taking off:
-  python scripts/hello_matrix.py
+  python scripts/hello_matrix_RMTT-306E2E.py
 
   # 3. Connect drone to 'Samsung' hotspot (while on drone Wi-Fi):
-  python scripts/hello_matrix.py --sta
+  python scripts/hello_matrix_RMTT-306E2E.py --sta
 """
 
 import argparse
@@ -97,7 +97,7 @@ def set_station_mode(sock, drone_ip, ssid, password):
 
     if "ok" in reply.lower() or "reboot" in reply.lower():
         print("\n[SUCCESS] Drone accepted station mode! It will reboot in ~3s and join the network.")
-        print(f"Ensure your PC is connected to '{ssid}', then run: python scripts/hello_matrix.py")
+        print(f"Ensure your PC is connected to '{ssid}', then run: python scripts/hello_matrix_RMTT-306E2E.py")
         return True
     else:
         print(f"\n[!] Drone response: '{reply}'")
@@ -272,7 +272,7 @@ def stream_camera(drone_ip):
         return True
 
 
-DRONE_IP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".drone-ip")
+DRONE_IP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".drone-ip-RMTT-306E2E")
 
 
 def wifi_ipv4():
@@ -401,7 +401,7 @@ def main():
                     "hold the power button for 5 seconds until the light flashes "
                     "yellow, then join that Wi-Fi and run this again.\n"
                     "To use the phone hotspot afterwards, rename it to one word "
-                    "with no spaces and run: python scripts/hello_matrix.py --sta"
+                    "with no spaces and run: python scripts/hello_matrix_RMTT-306E2E.py --sta"
                 )
             drone_ip = DEFAULT_DRONE_IP
 
