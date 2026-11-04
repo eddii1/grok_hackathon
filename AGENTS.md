@@ -4,7 +4,7 @@ Team repo for the Grok Hackathon at the Museum (Ctrl+Alt Museum, Pavia), 4-5 Nov
 
 ## Status
 
-Track and idea are not chosen yet. The candidates, rated against the tracks: [`docs/ideas-rating.md`](docs/ideas-rating.md). Recommended: Track 03 with "Prove the Mission + Ground Truth".
+Building our own idea (not one of the tracks): a fleet command platform where an operator tasks drones and other devices in plain language and Grok plans the mission ("find the person in the red jacket, follow them, take a photo"). First prize is a 30k startup grant, so the demo must read as an investable product. [`docs/plan.md`](docs/plan.md) holds the architecture, the interface contracts between workstreams, the work split and the timeline. Read it before changing any interface, and keep the contracts there in sync with the code.
 
 ## Tracks
 

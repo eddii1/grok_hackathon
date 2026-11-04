@@ -1,5 +1,7 @@
 # Ideas rating against the tracks
 
+> **Superseded on 2026-11-04:** the team chose its own idea, a fleet command platform. See [`plan.md`](plan.md).
+
 Re-rating of the team doc "ideas for grokbot hackathon" (version of 2026-11-03) against the proposed tracks published at https://pavia.grokbot.it/tracks (full cards: [`tracks.md`](tracks.md)). Written 2026-11-04, before the common judging rubric was announced.
 
 ## The constraint that changes everything
