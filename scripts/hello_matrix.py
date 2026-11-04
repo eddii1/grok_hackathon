@@ -24,9 +24,8 @@ DEFAULT_DRONE_IP = "192.168.10.1"
 CMD_PORT = 8889
 STATE_PORT = 8890
 
-# Phone hotspot. The Tello `ap` command splits on spaces, so the SSID and
-# password must each be a single word. "Samsung S24 Ultra" will not join.
-HOTSPOT_SSID = "Samsung S24 Ultra"
+# Phone hotspot (single-word SSID, WPA2-Personal)
+HOTSPOT_SSID = "Samsung"
 HOTSPOT_PASS = "12345678m"
 
 MESSAGE = "HELLO"
