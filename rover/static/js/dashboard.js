@@ -15,8 +15,20 @@ document.addEventListener('DOMContentLoaded', () => {
     activeKeys: new Set(),
     driveInterval: null,
     keyboardEnabled: true,
+    gripperState: 'open',
     currentFilter: 'all',
     activeModalFile: null,
+    viewMode: 'camera', // camera, map, split
+    mapZoom: 75,
+    mapPan: { x: 0, y: 0 },
+    tabMapZoom: 85,
+    tabMapPan: { x: 0, y: 0 },
+    isDraggingMap: false,
+    dragStart: { x: 0, y: 0 },
+    isDraggingTabMap: false,
+    tabDragStart: { x: 0, y: 0 },
+    mapData: null,
+    collisionAvoidanceEnabled: true,
   };
 
   // --- DOM ELEMENTS ---
@@ -24,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('statusText');
   const connStatusPill = document.getElementById('connStatusPill');
   const roverIpEl = document.getElementById('roverIp');
+  const wifiSsidEl = document.getElementById('wifiSsid');
   const batteryBar = document.getElementById('batteryBar');
   const batteryText = document.getElementById('batteryText');
   const recPill = document.getElementById('recPill');
@@ -32,6 +45,62 @@ document.addEventListener('DOMContentLoaded', () => {
   const hudSpeeds = document.getElementById('hudSpeeds');
   const hudRecordingTag = document.getElementById('hudRecordingTag');
   const cameraFlash = document.getElementById('cameraFlash');
+
+  // Top Nav Proximity Pill
+  const proximityPill = document.getElementById('proximityPill');
+  const proximityDot = document.getElementById('proximityDot');
+  const hudDistance = document.getElementById('hudDistance');
+
+  // View Mode Switcher Elements
+  const viewportWrapper = document.getElementById('viewportWrapper');
+  const videoContainer = document.getElementById('videoContainer');
+  const slamMapContainer = document.getElementById('slamMapContainer');
+  const slamCanvas = document.getElementById('slamCanvas');
+  const tabSlamCanvas = document.getElementById('tabSlamCanvas');
+  const viewModeBadge = document.getElementById('viewModeBadge');
+  const viewModeTitle = document.getElementById('viewModeTitle');
+  const btnModeCam = document.getElementById('btnModeCam');
+  const btnModeMap = document.getElementById('btnModeMap');
+  const btnModeSplit = document.getElementById('btnModeSplit');
+
+  // Map Quick Controls Overlay
+  const mapPoseHud = document.getElementById('mapPoseHud');
+  const mapYawHud = document.getElementById('mapYawHud');
+  const mapObstacleCountHud = document.getElementById('mapObstacleCountHud');
+  const mapDistanceHud = document.getElementById('mapDistanceHud');
+  const mapCollisionAlertHud = document.getElementById('mapCollisionAlertHud');
+  const mapDimensionHud = document.getElementById('mapDimensionHud');
+  const btnMapZoomIn = document.getElementById('btnMapZoomIn');
+  const btnMapZoomOut = document.getElementById('btnMapZoomOut');
+  const btnMapCenter = document.getElementById('btnMapCenter');
+  const btnMapClear = document.getElementById('btnMapClear');
+  const btnToggleBrake = document.getElementById('btnToggleBrake');
+
+  // Tab 4 Elements
+  const mapPointsBadge = document.getElementById('mapPointsBadge');
+  const tabDistanceVal = document.getElementById('tabDistanceVal');
+  const tabDistanceCmVal = document.getElementById('tabDistanceCmVal');
+  const tabProximityBar = document.getElementById('tabProximityBar');
+  const tabBrakeAlert = document.getElementById('tabBrakeAlert');
+  const tabPoseX = document.getElementById('tabPoseX');
+  const tabPoseY = document.getElementById('tabPoseY');
+  const tabPoseYaw = document.getElementById('tabPoseYaw');
+  const tabTrailCount = document.getElementById('tabTrailCount');
+  const tabObstaclesCount = document.getElementById('tabObstaclesCount');
+  const tabRoomWidth = document.getElementById('tabRoomWidth');
+  const tabRoomLength = document.getElementById('tabRoomLength');
+  const btnTabZoomIn = document.getElementById('btnTabZoomIn');
+  const btnTabZoomOut = document.getElementById('btnTabZoomOut');
+  const btnTabCenter = document.getElementById('btnTabCenter');
+  const btnTabClear = document.getElementById('btnTabClear');
+  const btnTabToggleBrake = document.getElementById('btnTabToggleBrake');
+
+  // Network Details in Settings Tab
+  const netDetailSsid = document.getElementById('netDetailSsid');
+  const netDetailRoverIp = document.getElementById('netDetailRoverIp');
+  const netDetailLocalIp = document.getElementById('netDetailLocalIp');
+  const netDetailSwitchMode = document.getElementById('netDetailSwitchMode');
+  const activeConnModeBadge = document.getElementById('activeConnModeBadge');
 
   // Buttons
   const btnCapture = document.getElementById('btnCapture');
@@ -120,6 +189,34 @@ document.addEventListener('DOMContentLoaded', () => {
       batteryText.textContent = `${data.battery}%`;
       batteryBar.style.width = `${Math.max(0, Math.min(100, data.battery))}%`;
 
+      // Update Wi-Fi and Network telemetry
+      const displaySsid = data.wifi_ssid || (data.rover_ip === '192.168.2.1' ? 'RMEP-2f19a1' : '--');
+      if (wifiSsidEl) {
+        wifiSsidEl.textContent = displaySsid;
+      }
+
+      if (netDetailSsid) netDetailSsid.textContent = displaySsid;
+      if (netDetailRoverIp) netDetailRoverIp.textContent = data.rover_ip || '--.---.---.---';
+      if (netDetailLocalIp) netDetailLocalIp.textContent = data.local_wifi_ip || '--.---.---.---';
+      if (activeConnModeBadge) {
+        activeConnModeBadge.textContent = data.conn_mode ? data.conn_mode.toUpperCase() : (data.status === 'CONNECTED' ? 'CONNECTED' : 'OFFLINE');
+        if (data.status === 'CONNECTED') {
+          activeConnModeBadge.className = 'badge badge-success';
+        } else {
+          activeConnModeBadge.className = 'badge';
+          activeConnModeBadge.style.color = 'var(--text-muted)';
+        }
+      }
+      if (netDetailSwitchMode) {
+        if (data.rover_ip === '192.168.2.1' || (displaySsid && displaySsid.startsWith('RMEP-'))) {
+          netDetailSwitchMode.textContent = 'Direct Wi-Fi Mode (Phone icon)';
+        } else if (data.rover_ip === '192.168.42.2') {
+          netDetailSwitchMode.textContent = 'USB RNDIS Mode';
+        } else {
+          netDetailSwitchMode.textContent = 'Router Mode (Networked squares icon)';
+        }
+      }
+
       if (wifiStatusAlert && data.status_msg) {
         wifiStatusAlert.textContent = data.status_msg;
         if (data.status === 'CONNECTED') {
@@ -160,6 +257,23 @@ document.addEventListener('DOMContentLoaded', () => {
         hudSpeeds.textContent = `VX: ${data.speeds.vx.toFixed(1)} | VY: ${data.speeds.vy.toFixed(1)} | VZ: ${data.speeds.vz.toFixed(1)}`;
       }
 
+      // Proximity & Collision Alert in Nav
+      if (proximityPill && hudDistance) {
+        const d = data.current_distance_mm || 0;
+        if (d > 0 && d <= 4000) {
+          hudDistance.textContent = `${d} mm`;
+          if (data.collision_warning) {
+            proximityPill.className = 'metric-pill proximity-pill warning';
+            hudDistance.textContent = `${d} mm [HAZARD]`;
+          } else {
+            proximityPill.className = 'metric-pill proximity-pill';
+          }
+        } else {
+          hudDistance.textContent = 'CLEAR';
+          proximityPill.className = 'metric-pill proximity-pill';
+        }
+      }
+
       // Robotic Arm Detection Notice
       const armSub = document.getElementById('armStatusSubtitle');
       if (armSub) {
@@ -178,6 +292,517 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setInterval(fetchStatus, 1000);
   fetchStatus();
+
+  // -------------------------------------------------------------
+  // 2D ROOM SLAM MAP & RADAR RENDERING
+  // -------------------------------------------------------------
+
+  function renderMapOnCanvas(canvas, zoom, pan) {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = rect.width;
+    const h = rect.height;
+    if (w === 0 || h === 0) return;
+
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    // Deep space tactical radar background
+    ctx.fillStyle = '#060d19';
+    ctx.fillRect(0, 0, w, h);
+
+    const cx = w / 2 + pan.x;
+    const cy = h / 2 + pan.y;
+
+    // Minor grid 0.5m
+    const minorStep = 0.5 * zoom;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(20, 45, 75, 0.4)';
+    ctx.beginPath();
+    const startX = (cx % minorStep) - minorStep;
+    for (let x = startX; x < w; x += minorStep) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+    }
+    const startY = (cy % minorStep) - minorStep;
+    for (let y = startY; y < h; y += minorStep) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+    }
+    ctx.stroke();
+
+    // Major grid 1.0m
+    const majorStep = 1.0 * zoom;
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
+    ctx.beginPath();
+    const mStartX = (cx % majorStep) - majorStep;
+    for (let x = mStartX; x < w; x += majorStep) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+    }
+    const mStartY = (cy % majorStep) - majorStep;
+    for (let y = mStartY; y < h; y += majorStep) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+    }
+    ctx.stroke();
+
+    // Concentric Range Rings (1m, 2m, 3m, 4m)
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    for (let r = 1; r <= 4; r++) {
+      const radius = r * zoom;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.4)';
+      ctx.font = '10px monospace';
+      ctx.fillText(`${r}m`, cx + 4, cy - radius + 11);
+    }
+    ctx.setLineDash([]);
+
+    // Center Crosshair Axes
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, h);
+    ctx.moveTo(0, cy);
+    ctx.lineTo(w, cy);
+    ctx.stroke();
+
+    const mapData = state.mapData;
+    if (!mapData) {
+      ctx.restore();
+      return;
+    }
+
+    // Draw Robot Trail
+    if (mapData.trail && mapData.trail.length > 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < mapData.trail.length; i++) {
+        const pt = mapData.trail[i];
+        const px = cx + pt.x * zoom;
+        const py = cy - pt.y * zoom;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Draw Mapped Obstacle Points
+    if (mapData.obstacles && mapData.obstacles.length > 0) {
+      const now = Date.now() / 1000;
+      for (let i = 0; i < mapData.obstacles.length; i++) {
+        const obs = mapData.obstacles[i];
+        const ox = cx + obs.x * zoom;
+        const oy = cy - obs.y * zoom;
+
+        const age = now - (obs.time || now);
+        if (age < 2.0) {
+          ctx.fillStyle = '#ffb800'; // Fresh hit in amber
+          ctx.shadowColor = '#ffb800';
+          ctx.shadowBlur = 6;
+        } else {
+          ctx.fillStyle = '#00f0ff';
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.fillRect(ox - 3, oy - 3, 6, 6);
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // Draw Robot Pose & Directional Glyph
+    const r = mapData.robot || { x: 0, y: 0, yaw: 0 };
+    const rx = cx + r.x * zoom;
+    const ry = cy - r.y * zoom;
+    const yawRad = (r.yaw * Math.PI) / 180.0;
+
+    ctx.save();
+    ctx.translate(rx, ry);
+    // Rotate by -yawRad (since canvas Y is downwards)
+    ctx.rotate(-yawRad);
+
+    // Dynamic ToF Sensor Beam Cone
+    const distM = (mapData.current_distance_mm || 0) / 1000.0;
+    if (distM > 0.05 && distM < 4.0) {
+      const beamLen = distM * zoom;
+      const beamAngle = 0.22; // ~25 deg cone
+      const grad = ctx.createRadialGradient(0, 0, 5, 0, 0, beamLen);
+
+      if (mapData.collision_warning) {
+        grad.addColorStop(0, 'rgba(255, 51, 102, 0.7)');
+        grad.addColorStop(1, 'rgba(255, 51, 102, 0.05)');
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = 'rgba(255, 51, 102, 0.8)';
+      } else {
+        grad.addColorStop(0, 'rgba(0, 240, 255, 0.35)');
+        grad.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(18, 0);
+      ctx.lineTo(beamLen * Math.cos(beamAngle), -beamLen * Math.sin(beamAngle));
+      ctx.arc(0, 0, beamLen, -beamAngle, beamAngle);
+      ctx.closePath();
+      ctx.fill();
+
+      // Laser center line
+      ctx.beginPath();
+      ctx.moveTo(18, 0);
+      ctx.lineTo(beamLen, 0);
+      ctx.stroke();
+
+      // Laser impact point blip
+      ctx.beginPath();
+      ctx.arc(beamLen, 0, 4, 0, Math.PI * 2);
+      ctx.fillStyle = mapData.collision_warning ? '#ff3366' : '#00ff88';
+      ctx.fill();
+    }
+
+    // Mecanum Rover Chassis Footprint
+    const rw = 24; // Half-width
+    const rl = 32; // Half-length
+    ctx.fillStyle = '#0e223d';
+    ctx.strokeStyle = mapData.collision_warning ? '#ff3366' : '#00f0ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-rl, -rw, rl * 2, rw * 2, 6);
+    ctx.fill();
+    ctx.stroke();
+
+    // 4 Mecanum Rollers
+    ctx.fillStyle = '#223856';
+    ctx.fillRect(-rl + 2, -rw - 4, 15, 5);
+    ctx.fillRect(rl - 17, -rw - 4, 15, 5);
+    ctx.fillRect(-rl + 2, rw - 1, 15, 5);
+    ctx.fillRect(rl - 17, rw - 1, 15, 5);
+
+    // Front Robotic Arm & Clamp representation
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(rl, -7);
+    ctx.lineTo(rl + 10, -7);
+    ctx.moveTo(rl, 7);
+    ctx.lineTo(rl + 10, 7);
+    ctx.stroke();
+
+    // Forward Direction Arrow
+    ctx.fillStyle = '#00f0ff';
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-6, -6);
+    ctx.lineTo(-2, 0);
+    ctx.lineTo(-6, 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------
+  // MAP DATA POLLING & HUD UPDATES
+  // -------------------------------------------------------------
+
+  async function pollMapData() {
+    try {
+      const res = await fetch('/api/map/data');
+      if (!res.ok) return;
+      const data = await res.json();
+      state.mapData = data;
+      state.collisionAvoidanceEnabled = data.collision_avoidance_enabled;
+
+      // Update Map HUD Overlay in CAM-01 card
+      if (mapPoseHud && data.robot) {
+        mapPoseHud.textContent = `POSE: X: ${data.robot.x.toFixed(2)}m | Y: ${data.robot.y.toFixed(2)}m`;
+      }
+      if (mapYawHud && data.robot) {
+        mapYawHud.textContent = `HEADING: ${data.robot.yaw.toFixed(1)}\u00B0`;
+      }
+      if (mapObstacleCountHud) {
+        mapObstacleCountHud.textContent = `OBSTACLES: ${data.obstacle_count} PTS`;
+      }
+      if (mapDistanceHud) {
+        mapDistanceHud.textContent = data.current_distance_mm > 0 ? `RANGE: ${data.current_distance_mm} mm` : 'RANGE: --';
+      }
+      if (mapCollisionAlertHud) {
+        mapCollisionAlertHud.style.display = data.collision_warning ? 'inline' : 'none';
+      }
+      if (mapDimensionHud && data.bounds) {
+        mapDimensionHud.textContent = `ROOM EST: ${data.bounds.length_m} x ${data.bounds.width_m} m`;
+      }
+
+      // Update Tab 4 Stats
+      if (mapPointsBadge) {
+        mapPointsBadge.textContent = `${data.obstacle_count} pts`;
+      }
+      if (tabDistanceVal) {
+        tabDistanceVal.textContent = data.current_distance_mm > 0 ? data.current_distance_mm : '--';
+      }
+      if (tabDistanceCmVal) {
+        tabDistanceCmVal.textContent = data.current_distance_mm > 0 ? `(${Math.round(data.current_distance_mm / 10)} cm)` : '(-- cm)';
+      }
+      if (tabProximityBar) {
+        const pct = Math.min(100, Math.max(0, (4000 - data.current_distance_mm) / 40));
+        tabProximityBar.style.width = data.current_distance_mm > 0 ? `${pct}%` : '0%';
+      }
+      if (tabBrakeAlert) {
+        tabBrakeAlert.style.display = data.collision_warning ? 'block' : 'none';
+      }
+      if (tabPoseX && data.robot) {
+        tabPoseX.textContent = `${data.robot.x.toFixed(2)} m`;
+      }
+      if (tabPoseY && data.robot) {
+        tabPoseY.textContent = `${data.robot.y.toFixed(2)} m`;
+      }
+      if (tabPoseYaw && data.robot) {
+        tabPoseYaw.textContent = `${data.robot.yaw.toFixed(1)}\u00B0`;
+      }
+      if (tabTrailCount && data.trail) {
+        tabTrailCount.textContent = data.trail.length;
+      }
+      if (tabObstaclesCount) {
+        tabObstaclesCount.textContent = `${data.obstacle_count} pts`;
+      }
+      if (tabRoomWidth && data.bounds) {
+        tabRoomWidth.textContent = `${data.bounds.width_m} m`;
+      }
+      if (tabRoomLength && data.bounds) {
+        tabRoomLength.textContent = `${data.bounds.length_m} m`;
+      }
+
+      // Render visible canvas(es)
+      if (state.viewMode === 'map' || state.viewMode === 'split') {
+        renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+      }
+
+      const tabMapPane = document.getElementById('tabMap');
+      if (tabMapPane && tabMapPane.classList.contains('active')) {
+        renderMapOnCanvas(tabSlamCanvas, state.tabMapZoom, state.tabMapPan);
+      }
+    } catch (e) {
+      // Map poll error
+    }
+  }
+
+  // Poll 2D map at 5 Hz (every 200ms)
+  setInterval(pollMapData, 200);
+
+  // -------------------------------------------------------------
+  // VIEW MODE SWITCHER (CAMERA / 2D MAP / SPLIT)
+  // -------------------------------------------------------------
+
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    [btnModeCam, btnModeMap, btnModeSplit].forEach(btn => btn && btn.classList.remove('active'));
+
+    if (mode === 'camera') {
+      if (btnModeCam) btnModeCam.classList.add('active');
+      viewportWrapper.className = 'viewport-wrapper';
+      videoContainer.style.display = 'flex';
+      slamMapContainer.style.display = 'none';
+      if (viewModeBadge) viewModeBadge.textContent = 'CAM-01';
+      if (viewModeTitle) viewModeTitle.textContent = 'PRIMARY OPTICAL SENSOR';
+    } else if (mode === 'map') {
+      if (btnModeMap) btnModeMap.classList.add('active');
+      viewportWrapper.className = 'viewport-wrapper';
+      videoContainer.style.display = 'none';
+      slamMapContainer.style.display = 'flex';
+      if (viewModeBadge) viewModeBadge.textContent = 'SLAM-2D';
+      if (viewModeTitle) viewModeTitle.textContent = '2D ROOM RADAR MAP';
+      renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+    } else if (mode === 'split') {
+      if (btnModeSplit) btnModeSplit.classList.add('active');
+      viewportWrapper.className = 'viewport-wrapper mode-split';
+      videoContainer.style.display = 'flex';
+      slamMapContainer.style.display = 'flex';
+      if (viewModeBadge) viewModeBadge.textContent = 'DUAL-VIEW';
+      if (viewModeTitle) viewModeTitle.textContent = 'OPTICAL & RADAR SLAM';
+      renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+    }
+  }
+
+  if (btnModeCam) btnModeCam.addEventListener('click', () => setViewMode('camera'));
+  if (btnModeMap) btnModeMap.addEventListener('click', () => setViewMode('map'));
+  if (btnModeSplit) btnModeSplit.addEventListener('click', () => setViewMode('split'));
+
+  // -------------------------------------------------------------
+  // MAP CANVAS PAN & ZOOM INTERACTION
+  // -------------------------------------------------------------
+
+  function setupCanvasInteraction(canvas, zoomKey, panKey) {
+    if (!canvas) return;
+
+    // Zoom on Wheel
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      state[zoomKey] = Math.max(25, Math.min(300, state[zoomKey] * zoomFactor));
+      renderMapOnCanvas(canvas, state[zoomKey], state[panKey]);
+    }, { passive: false });
+
+    // Drag to Pan
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX - state[panKey].x;
+      startY = e.clientY - state[panKey].y;
+      canvas.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      state[panKey].x = e.clientX - startX;
+      state[panKey].y = e.clientY - startY;
+      renderMapOnCanvas(canvas, state[zoomKey], state[panKey]);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        canvas.style.cursor = 'crosshair';
+      }
+    });
+
+    // Touch support
+    let touchStartX = 0;
+    let touchStartY = 0;
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX - state[panKey].x;
+        touchStartY = e.touches[0].clientY - state[panKey].y;
+      }
+    });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        state[panKey].x = e.touches[0].clientX - touchStartX;
+        state[panKey].y = e.touches[0].clientY - touchStartY;
+        renderMapOnCanvas(canvas, state[zoomKey], state[panKey]);
+      }
+    });
+  }
+
+  setupCanvasInteraction(slamCanvas, 'mapZoom', 'mapPan');
+  setupCanvasInteraction(tabSlamCanvas, 'tabMapZoom', 'tabMapPan');
+
+  // Map Controls: Zoom, Center, Clear, Toggle Brake
+  if (btnMapZoomIn) {
+    btnMapZoomIn.addEventListener('click', () => {
+      state.mapZoom = Math.min(300, state.mapZoom * 1.25);
+      renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+    });
+  }
+  if (btnMapZoomOut) {
+    btnMapZoomOut.addEventListener('click', () => {
+      state.mapZoom = Math.max(25, state.mapZoom * 0.8);
+      renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+    });
+  }
+  if (btnMapCenter) {
+    btnMapCenter.addEventListener('click', () => {
+      if (state.mapData && state.mapData.robot) {
+        state.mapPan.x = -state.mapData.robot.x * state.mapZoom;
+        state.mapPan.y = state.mapData.robot.y * state.mapZoom;
+      } else {
+        state.mapPan = { x: 0, y: 0 };
+      }
+      renderMapOnCanvas(slamCanvas, state.mapZoom, state.mapPan);
+    });
+  }
+  if (btnMapClear) {
+    btnMapClear.addEventListener('click', async () => {
+      if (!confirm('Clear all mapped obstacle points and movement trail?')) return;
+      await fetch('/api/map/clear', { method: 'POST' });
+      log('Cleared 2D room map.', 'warn');
+      pollMapData();
+    });
+  }
+
+  async function toggleBraking() {
+    const nextState = !state.collisionAvoidanceEnabled;
+    try {
+      const res = await fetch('/api/map/toggle_collision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nextState })
+      });
+      const data = await res.json();
+      state.collisionAvoidanceEnabled = data.collision_avoidance_enabled;
+      updateBrakeButtons();
+      log(`Automated collision brake ${state.collisionAvoidanceEnabled ? 'ENABLED' : 'DISABLED'}.`, 'info');
+    } catch (e) {
+      log(`Error toggling brake: ${e}`, 'error');
+    }
+  }
+
+  function updateBrakeButtons() {
+    const on = state.collisionAvoidanceEnabled;
+    [btnToggleBrake, btnTabToggleBrake].forEach(btn => {
+      if (!btn) return;
+      if (on) {
+        btn.textContent = 'BRAKE: ON';
+        btn.className = btn.id === 'btnToggleBrake' ? 'map-tool-btn btn-brake-toggle active' : 'btn btn-warning btn-sm btn-brake-toggle active';
+      } else {
+        btn.textContent = 'BRAKE: OFF';
+        btn.className = btn.id === 'btnToggleBrake' ? 'map-tool-btn btn-brake-toggle disabled' : 'btn btn-secondary btn-sm btn-brake-toggle disabled';
+      }
+    });
+  }
+
+  if (btnToggleBrake) btnToggleBrake.addEventListener('click', toggleBraking);
+  if (btnTabToggleBrake) btnTabToggleBrake.addEventListener('click', toggleBraking);
+
+  // Tab 4 Canvas Controls
+  if (btnTabZoomIn) {
+    btnTabZoomIn.addEventListener('click', () => {
+      state.tabMapZoom = Math.min(300, state.tabMapZoom * 1.25);
+      renderMapOnCanvas(tabSlamCanvas, state.tabMapZoom, state.tabMapPan);
+    });
+  }
+  if (btnTabZoomOut) {
+    btnTabZoomOut.addEventListener('click', () => {
+      state.tabMapZoom = Math.max(25, state.tabMapZoom * 0.8);
+      renderMapOnCanvas(tabSlamCanvas, state.tabMapZoom, state.tabMapPan);
+    });
+  }
+  if (btnTabCenter) {
+    btnTabCenter.addEventListener('click', () => {
+      if (state.mapData && state.mapData.robot) {
+        state.tabMapPan.x = -state.mapData.robot.x * state.tabMapZoom;
+        state.tabMapPan.y = state.mapData.robot.y * state.tabMapZoom;
+      } else {
+        state.tabMapPan = { x: 0, y: 0 };
+      }
+      renderMapOnCanvas(tabSlamCanvas, state.tabMapZoom, state.tabMapPan);
+    });
+  }
+  if (btnTabClear) {
+    btnTabClear.addEventListener('click', async () => {
+      if (!confirm('Clear all mapped obstacle points and movement trail?')) return;
+      await fetch('/api/map/clear', { method: 'POST' });
+      log('Cleared 2D room map.', 'warn');
+      pollMapData();
+    });
+  }
 
   // -------------------------------------------------------------
   // SPEED SLIDERS
@@ -324,19 +949,65 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleFullscreen();
       return;
     }
-    if (key === ' ') {
+    // Spacebar toggles clamp open/close
+    if (key === ' ' || e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      toggleClamp();
+      return;
+    }
+
+    // X or Escape halts chassis
+    if (key === 'x' || e.key === 'Escape') {
       e.preventDefault();
       state.activeKeys.clear();
       updateKeyboardDrive();
       sendStopCommand();
       return;
     }
+
     if (key === 'o') {
       controlGripper('open');
       return;
     }
     if (key === 'p') {
       controlGripper('close');
+      return;
+    }
+
+    // Arrow keys control Robotic Arm
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveArm(0, 20);
+      const b = document.getElementById('btnArmUp');
+      if (b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 200); }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveArm(0, -20);
+      const b = document.getElementById('btnArmDown');
+      if (b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 200); }
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      moveArm(-20, 0);
+      const b = document.getElementById('btnArmBack');
+      if (b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 200); }
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      moveArm(20, 0);
+      const b = document.getElementById('btnArmFwd');
+      if (b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 200); }
+      return;
+    }
+    if (e.key === 'Home' || key === 'h') {
+      e.preventDefault();
+      recenterArm();
+      const b = document.getElementById('btnArmRecenter');
+      if (b) { b.classList.add('active'); setTimeout(() => b.classList.remove('active'), 200); }
       return;
     }
 
@@ -389,7 +1060,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function controlGripper(action, power = 50) {
-    log(`Gripper action: ${action.toUpperCase()}`);
+    if (action === 'open' || action === 'close') {
+      state.gripperState = action;
+    }
+    log(`Clamp action: ${action.toUpperCase()}`);
     try {
       await fetch('/api/control/gripper', {
         method: 'POST',
@@ -397,7 +1071,21 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ action, power }),
       });
     } catch (e) {
-      log(`Gripper action failed: ${e}`, 'error');
+      log(`Clamp action failed: ${e}`, 'error');
+    }
+  }
+
+  async function toggleClamp() {
+    const nextAction = state.gripperState === 'open' ? 'close' : 'open';
+    state.gripperState = nextAction;
+    log(`Spacebar clamp toggle -> ${nextAction.toUpperCase()}`);
+    await controlGripper(nextAction);
+
+    // Visual button feedback
+    const btn = nextAction === 'open' ? document.getElementById('btnGripperOpen') : document.getElementById('btnGripperClose');
+    if (btn) {
+      btn.classList.add('active');
+      setTimeout(() => btn.classList.remove('active'), 250);
     }
   }
 
@@ -480,6 +1168,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   btnFullscreen.addEventListener('click', toggleFullscreen);
+
+  // Restart Camera Button
+  const btnRestartCamera = document.getElementById('btnRestartCamera');
+  if (btnRestartCamera) {
+    btnRestartCamera.addEventListener('click', async () => {
+      btnRestartCamera.disabled = true;
+      const span = btnRestartCamera.querySelector('span');
+      if (span) span.textContent = 'RESETTING...';
+      log('Requesting camera stream reset...', 'warn');
+      try {
+        const res = await fetch('/api/camera/restart', { method: 'POST' });
+        const d = await res.json();
+        if (d.success) {
+          log('Camera stream restarted successfully!', 'success');
+          const videoFeedEl = document.getElementById('cameraStream');
+          if (videoFeedEl) {
+            videoFeedEl.src = `/video_feed?t=${Date.now()}`;
+          }
+        } else {
+          log('Camera reset rejected by rover', 'error');
+        }
+      } catch (e) {
+        log(`Camera reset error: ${e}`, 'error');
+      }
+      setTimeout(() => {
+        btnRestartCamera.disabled = false;
+        if (span) span.textContent = 'RESET CAM';
+      }, 1500);
+    });
+  }
 
   // -------------------------------------------------------------
   // WI-FI PAIRING & AUTO-CONNECT
@@ -591,6 +1309,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (btn.dataset.tab === 'tabMedia') {
         loadGallery();
+      } else if (btn.dataset.tab === 'tabMap') {
+        setTimeout(() => {
+          renderMapOnCanvas(tabSlamCanvas, state.tabMapZoom, state.tabMapPan);
+        }, 50);
       }
     });
   });

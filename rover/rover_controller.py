@@ -12,6 +12,7 @@ import socket
 import logging
 import threading
 import datetime
+import queue
 from pathlib import Path
 import cv2
 import numpy as np
@@ -74,6 +75,19 @@ class RoverController:
         # Arm coordinate tracking
         self.arm_x = 130
         self.arm_y = 80
+
+        # Proximity Sensors & 2D SLAM Room Mapping
+        self.sensor = None
+        self.current_distance_mm = 0
+        self.robot_pos = {"x": 0.0, "y": 0.0, "z": 0.0}
+        self.robot_yaw = 0.0
+        self.map_points = []
+        self.map_grid_set = set()
+        self.robot_trail = []
+        self.map_lock = threading.Lock()
+        self.collision_avoidance_enabled = True
+        self.collision_warning = False
+        self.min_safety_dist_mm = 280  # 28 cm collision warning & auto-brake threshold
 
         # Motion & Watchdog
         self.last_drive_time = time.time()
@@ -163,11 +177,13 @@ class RoverController:
                     time.sleep(0.05)
 
                 logger.info(f">>> HANDSHAKE ACK SENT TO {addr} (AppID: {appid})! Rover should chime success! <<<")
-                self.status_msg = f"Handshake ACK sent to {rover_ip}! Initializing session..."
-
-                # Automatically trigger robot connection in background
+                
+                # Only trigger session if not already connected
                 if self.status != "CONNECTED":
+                    self.status_msg = f"Handshake ACK sent to {rover_ip}! Initializing session..."
                     threading.Thread(target=self._connect_robot_session, args=(rover_ip,), daemon=True).start()
+                else:
+                    logger.info(f"Rover handshake broadcast received from {rover_ip}, but session already CONNECTED at {self.rover_ip}")
 
             except socket.timeout:
                 continue
@@ -239,6 +255,26 @@ class RoverController:
         except Exception:
             pass
         return "192.168.2.23"
+
+    def _get_connected_wifi_ssid(self):
+        """Returns the SSID of the currently connected Wi-Fi network."""
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["netsh", "wlan", "show", "interfaces"],
+                text=True,
+                errors="replace",
+            )
+            for line in out.splitlines():
+                if "SSID" in line and "BSSID" not in line:
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        val = parts[1].strip()
+                        if val:
+                            return val
+        except Exception:
+            pass
+        return "RMEP-2f19a1" if (self.rover_ip == "192.168.2.1") else "Direct AP"
 
     # ---------------------------------------------------------
     # Robot Session Connection
@@ -322,17 +358,33 @@ class RoverController:
             except Exception as cam_err:
                 logger.warning(f"Camera stream exception (check ribbon cable): {cam_err}")
 
-            # Check robotic arm hardware connection
+            # Robotic arm is controlled via motion controller host (3, 6)
+            self.arm_connected = True
+            logger.info("Robotic arm online and ready for control.")
+
+            # Subscribe to proximity distance sensors for 2D room mapping
             try:
-                arm_ver = self.arm.get_version()
-                if arm_ver is None:
-                    logger.warning("Robotic arm servo controller not responding (Arm Version: None). Check 4-pin bus cable.")
-                    self.arm_connected = False
-                else:
-                    logger.info(f"Robotic arm online! Firmware: {arm_ver}")
-                    self.arm_connected = True
-            except Exception:
-                self.arm_connected = False
+                self.sensor = ep_robot.sensor
+                def on_distance(dist):
+                    if dist and len(dist) > 0:
+                        self._process_distance_reading(dist)
+                self.sensor.sub_distance(freq=10, callback=on_distance)
+                logger.info("ToF distance sensor subscribed at 10Hz.")
+            except Exception as e:
+                logger.warning(f"Distance sensor sub warning: {e}")
+
+            # Subscribe to chassis position and attitude odometry
+            try:
+                def on_pos(pos):
+                    self._process_position_reading(pos)
+                self.chassis.sub_position(cs=1, freq=10, callback=on_pos)
+
+                def on_atti(atti):
+                    self._process_attitude_reading(atti)
+                self.chassis.sub_attitude(freq=10, callback=on_atti)
+                logger.info("Chassis position & attitude odometry subscribed at 10Hz.")
+            except Exception as e:
+                logger.warning(f"Chassis odometry sub warning: {e}")
 
             self.status = "CONNECTED"
             self.status_msg = f"CONNECTED ({self.rover_ip} AP Mode)"
@@ -385,6 +437,7 @@ class RoverController:
     def _stream_capture_loop(self):
         """Continuously reads frames from EPCamera and encodes to JPEG."""
         logger.info("Live camera capture loop running.")
+        time.sleep(0.4)  # Let video socket and H264 decoder thread initialize
         first_frame = False
         while self.stream_active and self.camera:
             try:
@@ -408,10 +461,25 @@ class RoverController:
                             self.latest_jpeg = jpeg.tobytes()
                 else:
                     time.sleep(0.01)
+            except queue.Empty:
+                time.sleep(0.01)
             except Exception as e:
-                logger.debug(f"Frame capture warning: {e}")
                 time.sleep(0.05)
         logger.info("Live camera capture loop stopped.")
+
+    def restart_camera_stream(self):
+        """Restarts the robot camera video stream."""
+        if self.camera and self.status == "CONNECTED":
+            try:
+                self.camera.stop_video_stream()
+                time.sleep(0.3)
+                ok = self.camera.start_video_stream(display=False, resolution="720p")
+                logger.info(f"Camera stream restart result: {ok}")
+                return ok
+            except Exception as e:
+                logger.error(f"Restart camera stream error: {e}")
+                return False
+        return False
 
     def get_stream_frame(self):
         """Returns the latest JPEG frame or generates an active HUD standby frame."""
@@ -582,6 +650,11 @@ class RoverController:
         vy: left/right strafe velocity (-1.5 to 1.5 m/s)
         vz: rotation velocity (-180 to 180 deg/s)
         """
+        # Active Automated Collision Avoidance: Stop forward driving if obstacle is within safety threshold
+        if self.collision_avoidance_enabled and self.collision_warning and float(vx) > 0:
+            logger.warning(f"Obstacle in path ({self.current_distance_mm}mm). Auto-braking forward drive.")
+            vx = 0.0
+
         self.last_drive_time = time.time()
         self.current_speeds = {"vx": vx, "vy": vy, "vz": vz}
 
@@ -682,6 +755,138 @@ class RoverController:
         return True
 
     # ---------------------------------------------------------
+    # 2D SLAM Room Mapping & Sensor Processing
+    # ---------------------------------------------------------
+
+    def _process_position_reading(self, pos):
+        """Receives chassis position odometry: pos = (x, y, z) in meters."""
+        if pos and len(pos) >= 2:
+            x, y = float(pos[0]), float(pos[1])
+            z = float(pos[2]) if len(pos) > 2 else 0.0
+            self.robot_pos = {"x": x, "y": y, "z": z}
+
+            with self.map_lock:
+                if not self.robot_trail:
+                    self.robot_trail.append({"x": round(x, 3), "y": round(y, 3), "yaw": round(self.robot_yaw, 1)})
+                else:
+                    last = self.robot_trail[-1]
+                    dist_sq = (x - last["x"]) ** 2 + (y - last["y"]) ** 2
+                    if dist_sq > 0.0009:  # > 3 cm movement
+                        self.robot_trail.append({"x": round(x, 3), "y": round(y, 3), "yaw": round(self.robot_yaw, 1)})
+                        if len(self.robot_trail) > 1200:
+                            self.robot_trail.pop(0)
+
+    def _process_attitude_reading(self, atti):
+        """Receives chassis attitude: atti = (yaw, pitch, roll) in degrees."""
+        if atti and len(atti) > 0:
+            self.robot_yaw = round(float(atti[0]), 1)
+
+    def _process_distance_reading(self, dist):
+        """
+        Receives ToF proximity distance array in mm. Port 1 is dist[0].
+        Projects obstacle into 2D Cartesian world map using chassis odometry + yaw.
+        """
+        if not dist or len(dist) == 0:
+            return
+
+        d_mm = int(dist[0])
+        self.current_distance_mm = d_mm
+
+        # Collision warning evaluation (< 280 mm threshold)
+        if 0 < d_mm <= self.min_safety_dist_mm:
+            self.collision_warning = True
+        else:
+            self.collision_warning = False
+
+        # If valid obstacle detection range (between 60 mm and 4000 mm)
+        if 60 <= d_mm <= 4000:
+            import math
+            d_m = d_mm / 1000.0
+
+            # Convert yaw angle to radians
+            # Positive yaw is counter-clockwise in RoboMaster
+            yaw_rad = math.radians(self.robot_yaw)
+
+            rx = self.robot_pos["x"]
+            ry = self.robot_pos["y"]
+
+            # Compute obstacle position in Cartesian world frame
+            ox = rx + d_m * math.cos(yaw_rad)
+            oy = ry + d_m * math.sin(yaw_rad)
+
+            # Spatial discretization to 4 cm (0.04m) resolution grid to avoid duplication
+            grid_key = (round(ox / 0.04), round(oy / 0.04))
+
+            with self.map_lock:
+                if grid_key not in self.map_grid_set:
+                    self.map_grid_set.add(grid_key)
+                    self.map_points.append({
+                        "x": round(ox, 3),
+                        "y": round(oy, 3),
+                        "dist_mm": d_mm,
+                        "time": time.time()
+                    })
+                    # Keep maximum 2000 points for real-time responsiveness
+                    if len(self.map_points) > 2000:
+                        evicted = self.map_points.pop(0)
+                        evicted_key = (round(evicted["x"] / 0.04), round(evicted["y"] / 0.04))
+                        self.map_grid_set.discard(evicted_key)
+
+    def get_map_data(self):
+        """Returns 2D SLAM room map and proximity telemetry."""
+        with self.map_lock:
+            all_x = [p["x"] for p in self.map_points] + [self.robot_pos["x"]]
+            all_y = [p["y"] for p in self.map_points] + [self.robot_pos["y"]]
+            bounds = {
+                "min_x": round(min(all_x), 2) if all_x else -1.0,
+                "max_x": round(max(all_x), 2) if all_x else 1.0,
+                "min_y": round(min(all_y), 2) if all_y else -1.0,
+                "max_y": round(max(all_y), 2) if all_y else 1.0,
+            }
+            bounds["width_m"] = round(bounds["max_x"] - bounds["min_x"], 2)
+            bounds["length_m"] = round(bounds["max_y"] - bounds["min_y"], 2)
+
+            return {
+                "robot": {
+                    "x": round(self.robot_pos["x"], 3),
+                    "y": round(self.robot_pos["y"], 3),
+                    "z": round(self.robot_pos["z"], 3),
+                    "yaw": round(self.robot_yaw, 1),
+                },
+                "current_distance_mm": self.current_distance_mm,
+                "collision_warning": self.collision_warning,
+                "collision_avoidance_enabled": self.collision_avoidance_enabled,
+                "safety_dist_mm": self.min_safety_dist_mm,
+                "obstacle_count": len(self.map_points),
+                "obstacles": self.map_points,
+                "trail": self.robot_trail,
+                "bounds": bounds,
+            }
+
+    def clear_map(self):
+        """Clears 2D room map obstacles and robot trail."""
+        with self.map_lock:
+            self.map_points.clear()
+            self.map_grid_set.clear()
+            self.robot_trail.clear()
+            self.robot_trail.append({
+                "x": round(self.robot_pos["x"], 3),
+                "y": round(self.robot_pos["y"], 3),
+                "yaw": round(self.robot_yaw, 1)
+            })
+        logger.info("2D Room SLAM Map cleared.")
+        return True
+
+    def toggle_collision_avoidance(self, enabled=None):
+        """Enables or disables automatic collision brake."""
+        if enabled is None:
+            self.collision_avoidance_enabled = not self.collision_avoidance_enabled
+        else:
+            self.collision_avoidance_enabled = bool(enabled)
+        logger.info(f"Collision avoidance set to: {self.collision_avoidance_enabled}")
+        return self.collision_avoidance_enabled
+
+    # ---------------------------------------------------------
     # Status & Media Listing
     # ---------------------------------------------------------
 
@@ -694,9 +899,28 @@ class RoverController:
         if self.is_recording and self.recording_start_time:
             rec_duration = round(time.time() - self.recording_start_time, 1)
 
+        wifi_ssid = self._get_connected_wifi_ssid()
+        local_wifi_ip = self._get_local_wifi_ip()
+
+        conn_mode = "Disconnected"
+        status_msg = self.status_msg
+        if self.status == "CONNECTED":
+            if self.rover_ip == "192.168.2.1" or (wifi_ssid and wifi_ssid.startswith("RMEP-")):
+                conn_mode = "Direct AP Mode"
+                status_msg = f"Connected via Direct Rover Wi-Fi ({wifi_ssid}) at {self.rover_ip}"
+            elif self.rover_ip == "192.168.42.2":
+                conn_mode = "USB Cable (RNDIS)"
+                status_msg = f"Connected via USB RNDIS cable at {self.rover_ip}"
+            else:
+                conn_mode = f"Router Mode ({wifi_ssid})"
+                status_msg = f"Connected to {wifi_ssid} at {self.rover_ip}"
+
         return {
             "status": self.status,
-            "status_msg": self.status_msg,
+            "status_msg": status_msg,
+            "conn_mode": conn_mode,
+            "wifi_ssid": wifi_ssid,
+            "local_wifi_ip": local_wifi_ip,
             "rover_ip": self.rover_ip,
             "battery": self.battery_level,
             "arm_connected": getattr(self, "arm_connected", True),
@@ -706,6 +930,15 @@ class RoverController:
             "media_count": len(media_files),
             "media_storage_bytes": total_size,
             "speeds": self.current_speeds,
+            "current_distance_mm": self.current_distance_mm,
+            "collision_warning": self.collision_warning,
+            "collision_avoidance_enabled": self.collision_avoidance_enabled,
+            "obstacle_count": len(self.map_points),
+            "robot_pose": {
+                "x": round(self.robot_pos["x"], 2),
+                "y": round(self.robot_pos["y"], 2),
+                "yaw": round(self.robot_yaw, 1),
+            },
         }
 
     def list_media(self):

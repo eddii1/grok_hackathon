@@ -10,3 +10,5 @@ scripts/.drone-ip
 scripts/.drone-ip-RMTT-306E2E
 captures/
 models/
+rover/media/*
+!rover/media/.gitkeep

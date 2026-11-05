@@ -868,6 +868,78 @@ input[type="range"]::-webkit-slider-thumb {
    TAB 1: WI-FI SETUP
    ========================================================= */
 
+.active-network-card {
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.net-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.net-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: var(--accent-cyan);
+}
+
+.net-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+  display: inline-block;
+  animation: pulse-dot 1.8s infinite ease-in-out;
+}
+
+.badge-success {
+  background: rgba(0, 255, 120, 0.15);
+  border: 1px solid rgba(0, 255, 120, 0.4);
+  color: var(--accent-green);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.net-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+
+.net-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.net-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.net-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+}
+
 .wifi-setup-grid {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -875,7 +947,79 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @media (max-width: 800px) {
-  .wifi-setup-grid {
+  .active-network-card {
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.net-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.net-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: var(--accent-cyan);
+}
+
+.net-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 8px var(--accent-green);
+  display: inline-block;
+  animation: pulse-dot 1.8s infinite ease-in-out;
+}
+
+.badge-success {
+  background: rgba(0, 255, 120, 0.15);
+  border: 1px solid rgba(0, 255, 120, 0.4);
+  color: var(--accent-green);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.net-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem 1.5rem;
+}
+
+.net-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.net-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.net-val {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.wifi-setup-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1329,5 +1473,358 @@ kbd {
   padding: 0.85rem 1.25rem;
   background: var(--bg-card-sub);
   border-top: 1px solid var(--border-color);
+}
+
+/* =========================================================
+   2D SLAM ROOM MAP & RADAR STYLES
+   ========================================================= */
+
+/* Top Nav Proximity Pill */
+.proximity-pill {
+  transition: all 0.3s ease;
+}
+
+.proximity-pill.warning {
+  background: rgba(255, 51, 102, 0.2) !important;
+  border-color: var(--accent-red) !important;
+  box-shadow: 0 0 12px rgba(255, 51, 102, 0.4);
+}
+
+.proximity-pill.warning .indicator-dot {
+  background: var(--accent-red) !important;
+  box-shadow: 0 0 8px var(--accent-red) !important;
+  animation: pulse 0.7s infinite;
+}
+
+.proximity-pill.warning .value {
+  color: var(--accent-red) !important;
+  font-weight: 700;
+}
+
+/* View Mode Switcher in CAM-01 Header */
+.view-mode-switcher {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+}
+
+.view-mode-btn:hover {
+  color: #fff;
+}
+
+.view-mode-btn.active {
+  background: var(--accent-cyan);
+  color: #0b111e;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+}
+
+/* Viewport Wrapper: Handles Camera / Map / Split View */
+.viewport-wrapper {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+.viewport-wrapper.mode-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .viewport-wrapper.mode-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 2D SLAM Canvas Container */
+.slam-map-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: radial-gradient(circle at center, #0a1424 0%, #040810 100%);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slam-map-container canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+/* Map HUD Overlay & Controls */
+.map-hud-overlay {
+  pointer-events: none;
+}
+
+.map-collision-alert {
+  color: #ff3366;
+  font-weight: 700;
+  animation: pulse 0.7s infinite;
+  text-shadow: 0 0 8px rgba(255, 51, 102, 0.8);
+}
+
+.map-quick-controls {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  background: rgba(10, 17, 30, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.map-tool-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.map-tool-btn:hover {
+  background: rgba(0, 240, 255, 0.2);
+  border-color: var(--accent-cyan);
+  color: #fff;
+}
+
+.btn-brake-toggle {
+  font-size: 0.7rem;
+}
+
+.btn-brake-toggle.active {
+  background: rgba(0, 255, 136, 0.15);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.btn-brake-toggle.disabled {
+  background: rgba(255, 51, 102, 0.15);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+/* Tab 4: 2D Room Radar Map Layout */
+.tab-map-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 1000px) {
+  .tab-map-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tab-map-canvas-card {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-map-canvas-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 440px;
+  background: radial-gradient(circle at center, #081220 0%, #03060c 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-map-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.canvas-controls-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  background: rgba(0, 0, 0, 0.5);
+  border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.canvas-controls-bar .ctrl-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.tab-map-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.map-stat-card {
+  background: var(--bg-card-sub);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.map-stat-card .card-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 0.08em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.big-metric-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.big-metric-row .big-val {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.big-metric-row .unit {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.big-metric-row .sub-dist {
+  font-size: 0.95rem;
+  color: var(--accent-cyan);
+  margin-left: 0.35rem;
+}
+
+.proximity-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.proximity-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-gold) 70%, var(--accent-red) 100%);
+  transition: width 0.15s ease-out;
+}
+
+.brake-alert-banner {
+  background: rgba(255, 51, 102, 0.15);
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  animation: pulse 0.7s infinite;
+  text-align: center;
+}
+
+.stat-kv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.stat-kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.stat-kv .k {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.stat-kv .v {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.map-help-card {
+  background: rgba(0, 240, 255, 0.04);
+  border: 1px dashed rgba(0, 240, 255, 0.25);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.map-help-card .help-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 0.4rem;
+}
+
+.map-help-card p {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.map-help-card kbd {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
 }
 

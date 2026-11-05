@@ -92,6 +92,81 @@ def api_wifi_disconnect():
     return jsonify({"success": True, "status": rover_ctrl.status})
 
 
+@app.route("/api/camera/restart", methods=["POST"])
+def api_camera_restart():
+    """Restarts the robot camera video stream."""
+    success = rover_ctrl.restart_camera_stream()
+    return jsonify({"success": success})
+
+
+@app.route("/api/debug/stream")
+def api_debug_stream():
+    """Diagnostic telemetry for live video stream."""
+    cam = rover_ctrl.camera
+    res = {
+        "status": rover_ctrl.status,
+        "camera_exists": bool(cam),
+        "stream_active": rover_ctrl.stream_active,
+        "latest_jpeg_len": len(rover_ctrl.latest_jpeg) if rover_ctrl.latest_jpeg else 0,
+    }
+    if cam and hasattr(cam, "_liveview"):
+        lv = cam._liveview
+        res["video_streaming"] = getattr(lv, "_video_streaming", None)
+        conn = getattr(lv, "_video_stream_conn", None)
+        if conn:
+            res["conn_receiving"] = getattr(conn, "_receiving", None)
+            res["conn_recv_count"] = getattr(conn, "_recv_count", None)
+            res["conn_sock"] = str(getattr(conn, "_sock", None))
+        q = getattr(lv, "_video_frame_queue", None)
+        if q:
+            res["video_queue_qsize"] = q.qsize()
+    return jsonify(res)
+
+
+@app.route("/api/sensor/check")
+def api_sensor_check():
+    """Checks if ToF proximity distance sensors are present and reading data."""
+    if not rover_ctrl.robot:
+        return jsonify({"connected": False, "has_sensors": False})
+    res = {"connected": True}
+    try:
+        sensor = rover_ctrl.robot.sensor
+        readings = []
+        def on_tof(dist):
+            readings.append(dist)
+        sensor.sub_distance(freq=10, callback=on_tof)
+        time.sleep(0.6)
+        sensor.unsub_distance()
+        res["tof_readings"] = readings[-1] if readings else None
+        res["has_sensors"] = bool(readings)
+    except Exception as e:
+        res["error"] = str(e)
+        res["has_sensors"] = False
+    return jsonify(res)
+
+
+@app.route("/api/map/data")
+def api_map_data():
+    """Returns 2D SLAM room map, obstacle points, trail, and proximity telemetry."""
+    return jsonify(rover_ctrl.get_map_data())
+
+
+@app.route("/api/map/clear", methods=["POST"])
+def api_map_clear():
+    """Clears room map obstacles and reset trail."""
+    success = rover_ctrl.clear_map()
+    return jsonify({"success": success})
+
+
+@app.route("/api/map/toggle_collision", methods=["POST"])
+def api_map_toggle_collision():
+    """Toggles or sets automated collision avoidance braking."""
+    data = request.get_json(silent=True) or {}
+    enabled = data.get("enabled", None)
+    new_state = rover_ctrl.toggle_collision_avoidance(enabled=enabled)
+    return jsonify({"success": True, "collision_avoidance_enabled": new_state})
+
+
 @app.route("/api/control/drive", methods=["POST"])
 def api_control_drive():
     """

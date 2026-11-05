@@ -31,9 +31,9 @@
 
       <div class="nav-metrics">
         <!-- Wi-Fi Network -->
-        <div class="metric-pill">
+        <div class="metric-pill" title="Active Wi-Fi Network">
           <span class="label">WI-FI</span>
-          <span class="value" id="wifiSsid">Samsung</span>
+          <span class="value" id="wifiSsid">Detecting...</span>
         </div>
 
         <!-- Connection Status -->
@@ -46,6 +46,13 @@
         <div class="metric-pill">
           <span class="label">IP</span>
           <span class="value mono" id="roverIp">--.---.---.---</span>
+        </div>
+
+        <!-- Proximity / Collision Status -->
+        <div class="metric-pill proximity-pill" id="proximityPill">
+          <span class="indicator-dot" id="proximityDot"></span>
+          <span class="label">PROXIMITY</span>
+          <span class="value mono" id="hudDistance">-- mm</span>
         </div>
 
         <!-- Battery -->
@@ -72,48 +79,90 @@
       <section class="video-section card">
         <div class="card-header">
           <div class="header-title">
-            <span class="badge">CAM-01</span>
-            <h2>PRIMARY OPTICAL SENSOR</h2>
+            <span class="badge" id="viewModeBadge">CAM-01</span>
+            <h2 id="viewModeTitle">PRIMARY OPTICAL SENSOR</h2>
+          </div>
+          <!-- View Mode Switcher -->
+          <div class="view-mode-switcher">
+            <button class="view-mode-btn active" data-mode="camera" id="btnModeCam">CAMERA</button>
+            <button class="view-mode-btn" data-mode="map" id="btnModeMap">2D MAP</button>
+            <button class="view-mode-btn" data-mode="split" id="btnModeSplit">SPLIT</button>
           </div>
           <div class="header-tags">
             <span class="tag">720P HD</span>
             <span class="tag" id="fpsTag">30 FPS</span>
-            <span class="tag live-tag">LIVE FEED</span>
+            <span class="tag live-tag" id="liveTag">LIVE FEED</span>
           </div>
         </div>
 
-        <div class="video-container" id="videoContainer">
-          <img id="videoFeed" src="/video_feed" alt="Rover Live Stream">
-          
-          <!-- Tactical HUD Overlay -->
-          <div class="hud-overlay">
-            <div class="hud-corner top-left">
-              <span>FOV: 120&deg;</span>
-              <span>RES: 1280x720</span>
+        <div class="viewport-wrapper" id="viewportWrapper">
+          <div class="video-container" id="videoContainer">
+            <img id="videoFeed" src="/video_feed" alt="Rover Live Stream">
+            
+            <!-- Tactical HUD Overlay -->
+            <div class="hud-overlay">
+              <div class="hud-corner top-left">
+                <span>FOV: 120&deg;</span>
+                <span>RES: 1280x720</span>
+              </div>
+              <div class="hud-corner top-right">
+                <span id="hudTimestamp">2026-11-04 00:00:00</span>
+                <span id="hudRecordingTag" class="hud-rec" style="display: none;">[RECORDING ACTIVE]</span>
+              </div>
+              <div class="hud-crosshair">
+                <div class="crosshair-circle"></div>
+                <div class="crosshair-line h-left"></div>
+                <div class="crosshair-line h-right"></div>
+                <div class="crosshair-line v-top"></div>
+                <div class="crosshair-line v-bottom"></div>
+              </div>
+              <div class="hud-corner bottom-left">
+                <span>LATENCY: &lt;45ms</span>
+                <span id="hudSpeeds">VX: 0.0 | VY: 0.0 | VZ: 0.0</span>
+              </div>
+              <div class="hud-corner bottom-right">
+                <span>MECANUM DRIVE</span>
+                <span>EP ROBOTIC ARM</span>
+              </div>
             </div>
-            <div class="hud-corner top-right">
-              <span id="hudTimestamp">2026-11-04 00:00:00</span>
-              <span id="hudRecordingTag" class="hud-rec" style="display: none;">[RECORDING ACTIVE]</span>
-            </div>
-            <div class="hud-crosshair">
-              <div class="crosshair-circle"></div>
-              <div class="crosshair-line h-left"></div>
-              <div class="crosshair-line h-right"></div>
-              <div class="crosshair-line v-top"></div>
-              <div class="crosshair-line v-bottom"></div>
-            </div>
-            <div class="hud-corner bottom-left">
-              <span>LATENCY: &lt;45ms</span>
-              <span id="hudSpeeds">VX: 0.0 | VY: 0.0 | VZ: 0.0</span>
-            </div>
-            <div class="hud-corner bottom-right">
-              <span>MECANUM DRIVE</span>
-              <span>EP ROBOTIC ARM</span>
-            </div>
+
+            <!-- Flash Overlay for photo capture -->
+            <div class="camera-flash" id="cameraFlash"></div>
           </div>
 
-          <!-- Flash Overlay for photo capture -->
-          <div class="camera-flash" id="cameraFlash"></div>
+          <!-- 2D SLAM ROOM MAP CONTAINER -->
+          <div class="slam-map-container" id="slamMapContainer" style="display: none;">
+            <canvas id="slamCanvas"></canvas>
+            
+            <!-- Tactical SLAM HUD Overlay -->
+            <div class="hud-overlay map-hud-overlay">
+              <div class="hud-corner top-left">
+                <span>SLAM: 2D ROOM RADAR</span>
+                <span id="mapPoseHud">POSE: X: 0.00m | Y: 0.00m</span>
+                <span id="mapYawHud">HEADING: 0.0&deg;</span>
+              </div>
+              <div class="hud-corner top-right">
+                <span id="mapObstacleCountHud">OBSTACLES: 0 PTS</span>
+                <span id="mapDistanceHud">RANGE: -- mm</span>
+                <span id="mapCollisionAlertHud" class="map-collision-alert" style="display: none;">[AUTO-BRAKE ACTIVE]</span>
+              </div>
+              <div class="map-quick-controls">
+                <button class="map-tool-btn" id="btnMapZoomIn" title="Zoom In">+</button>
+                <button class="map-tool-btn" id="btnMapZoomOut" title="Zoom Out">&minus;</button>
+                <button class="map-tool-btn" id="btnMapCenter" title="Recenter View">&#9678;</button>
+                <button class="map-tool-btn" id="btnMapClear" title="Clear Map Obstacles">&#128465; CLEAR</button>
+                <button class="map-tool-btn btn-brake-toggle active" id="btnToggleBrake" title="Toggle Auto-Braking">BRAKE: ON</button>
+              </div>
+              <div class="hud-corner bottom-left">
+                <span>GRID: 0.5m &bull; RES: 4cm</span>
+                <span id="mapDimensionHud">ROOM EST: -- x -- m</span>
+              </div>
+              <div class="hud-corner bottom-right">
+                <span>TOF SENSOR 10Hz</span>
+                <span>CHASSIS ODOMETRY</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Action Toolbar -->
@@ -126,6 +175,14 @@
                 <circle cx="12" cy="13" r="4"></circle>
               </svg>
               <span>CAPTURE SNAPSHOT</span>
+            </button>
+
+            <!-- Reset Camera Stream -->
+            <button class="btn btn-secondary" id="btnRestartCamera" title="Restart Camera Video Stream">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>RESET CAM</span>
             </button>
 
             <!-- Start/Stop Recording -->
@@ -201,8 +258,8 @@
                   <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,12 18,4 18,20"/></svg>
                 </button>
                 <!-- Stop Center -->
-                <button class="dpad-btn center-stop" id="btnStop" data-vx="0" data-vy="0" data-vz="0" title="Stop (Space)">
-                  <span class="key-hint">SPACE</span>
+                <button class="dpad-btn center-stop" id="btnStop" data-vx="0" data-vy="0" data-vz="0" title="Stop Chassis (X / Esc)">
+                  <span class="key-hint">STOP</span>
                   <div class="stop-box"></div>
                 </button>
                 <!-- Strafe Right -->
@@ -283,7 +340,7 @@
 
               <!-- Gripper Controls -->
               <div class="sub-ctrl-box">
-                <span class="box-title">CLAW GRIPPER</span>
+                <span class="box-title">CLAW GRIPPER / CLAMP <span style="font-size:0.65rem;color:var(--accent-cyan);font-weight:normal;margin-left:6px;">[SPACEBAR]</span></span>
                 <div class="gripper-buttons">
                   <button class="btn btn-ctrl btn-gripper-open" id="btnGripperOpen" data-action="open">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
@@ -321,7 +378,7 @@
             <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
             <line x1="12" y1="20" x2="12.01" y2="20"></line>
           </svg>
-          <span>WI-FI PAIRING ASSISTANT (Samsung)</span>
+          <span>NETWORK &amp; WI-FI SETTINGS</span>
         </button>
 
         <button class="tab-btn" data-tab="tabMedia">
@@ -334,6 +391,16 @@
           <span class="pill-badge" id="mediaCountBadge">0</span>
         </button>
 
+        <button class="tab-btn" data-tab="tabMap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>2D ROOM RADAR MAP</span>
+          <span class="pill-badge" id="mapPointsBadge">0 pts</span>
+        </button>
+
         <button class="tab-btn" data-tab="tabLogs">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
             <polyline points="4 17 10 11 4 5"></polyline>
@@ -344,8 +411,37 @@
       </div>
 
       <div class="tabs-body">
-        <!-- TAB 1: WI-FI SETUP -->
+        <!-- TAB 1: WI-FI SETUP & NETWORK STATUS -->
         <div class="tab-pane active" id="tabWifi">
+          <!-- Active Network Status Box -->
+          <div class="active-network-card" id="activeNetworkCard">
+            <div class="net-status-header">
+              <div class="net-title-group">
+                <span class="net-pulse-dot" id="netPulseDot"></span>
+                <strong id="activeConnTitle">CURRENT NETWORK LINK</strong>
+              </div>
+              <span class="badge badge-success" id="activeConnModeBadge">DIRECT ROVER WI-FI (AP)</span>
+            </div>
+            <div class="net-details-grid">
+              <div class="net-item">
+                <span class="net-label">CONNECTED SSID</span>
+                <span class="net-val" id="netDetailSsid">RMEP-2f19a1</span>
+              </div>
+              <div class="net-item">
+                <span class="net-label">ROVER IP</span>
+                <span class="net-val mono" id="netDetailRoverIp">192.168.2.1</span>
+              </div>
+              <div class="net-item">
+                <span class="net-label">PC WI-FI IP</span>
+                <span class="net-val mono" id="netDetailLocalIp">192.168.2.23</span>
+              </div>
+              <div class="net-item">
+                <span class="net-label">CONTROLLER SWITCH</span>
+                <span class="net-val" id="netDetailSwitchMode">Direct Wi-Fi Mode (Phone icon)</span>
+              </div>
+            </div>
+          </div>
+
           <div class="wifi-setup-grid">
             <!-- QR Code Card -->
             <div class="qr-display-box">
@@ -361,7 +457,10 @@
 
             <!-- Instructions & Actions -->
             <div class="wifi-instructions">
-              <h3>CONNECTING ROVER TO SAMSUNG HOTSPOT:</h3>
+              <h3>SWITCH TO SAMSUNG HOTSPOT (OPTIONAL):</h3>
+              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">
+                The rover operates seamlessly in <strong>Direct Wi-Fi Mode</strong>. To migrate it to your <strong>Samsung hotspot</strong> instead, follow these 4 steps:
+              </p>
               <ol class="step-list">
                 <li>
                   <div class="step-num">1</div>
@@ -459,15 +558,113 @@
             <div class="cheatsheet-box">
               <h4>KEYBOARD SHORTCUTS</h4>
               <ul class="shortcut-list">
+                <li><kbd>&uarr;</kbd> / <kbd>&darr;</kbd> : Robotic Arm Pitch Up / Down</li>
+                <li><kbd>&larr;</kbd> / <kbd>&rarr;</kbd> : Robotic Arm Retract / Extend</li>
+                <li><kbd>H</kbd> : Robotic Arm Reset Home</li>
                 <li><kbd>W</kbd> / <kbd>S</kbd> : Drive Forward / Backward</li>
                 <li><kbd>A</kbd> / <kbd>D</kbd> : Strafe Left / Strafe Right</li>
                 <li><kbd>Q</kbd> / <kbd>E</kbd> : Rotate Left / Rotate Right</li>
-                <li><kbd>Space</kbd> : Emergency Stop Chassis</li>
+                <li><kbd>Space</kbd> : Toggle Clamp (Open / Close)</li>
+                <li><kbd>O</kbd> / <kbd>P</kbd> : Open / Close Clamp</li>
+                <li><kbd>X</kbd> / <kbd>Esc</kbd> : Stop Chassis</li>
                 <li><kbd>C</kbd> : Capture Snapshot</li>
                 <li><kbd>R</kbd> : Toggle Video Recording</li>
                 <li><kbd>F</kbd> : Toggle Fullscreen</li>
-                <li><kbd>O</kbd> / <kbd>P</kbd> : Open / Close Gripper</li>
               </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: 2D ROOM SLAM MAP & RADAR -->
+        <div class="tab-pane" id="tabMap">
+          <div class="tab-map-grid">
+            <!-- Expanded Radar Canvas -->
+            <div class="tab-map-canvas-card">
+              <div class="tab-map-canvas-wrap">
+                <canvas id="tabSlamCanvas"></canvas>
+                <div class="canvas-controls-bar">
+                  <div class="ctrl-group">
+                    <button class="btn btn-secondary btn-sm" id="btnTabZoomIn" title="Zoom In">+</button>
+                    <button class="btn btn-secondary btn-sm" id="btnTabZoomOut" title="Zoom Out">&minus;</button>
+                    <button class="btn btn-secondary btn-sm" id="btnTabCenter" title="Recenter View">&#9678; RECENTER</button>
+                    <button class="btn btn-danger btn-sm" id="btnTabClear" title="Clear Map Obstacles">&#128465; CLEAR MAP</button>
+                  </div>
+                  <div class="ctrl-group">
+                    <button class="btn btn-warning btn-sm btn-brake-toggle active" id="btnTabToggleBrake">COLLISION BRAKE: ON</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Radar Telemetry & Stats -->
+            <div class="tab-map-sidebar">
+              <!-- Live Sensor Metric Card -->
+              <div class="map-stat-card">
+                <div class="card-title">PROXIMITY RADAR SENSOR</div>
+                <div class="big-metric-row">
+                  <span class="big-val mono" id="tabDistanceVal">--</span>
+                  <span class="unit">mm</span>
+                  <span class="sub-dist mono" id="tabDistanceCmVal">(-- cm)</span>
+                </div>
+                <div class="proximity-bar-wrap">
+                  <div class="proximity-bar-fill" id="tabProximityBar" style="width: 0%;"></div>
+                </div>
+                <div class="brake-alert-banner" id="tabBrakeAlert" style="display: none;">
+                  &#9888; PROXIMITY HAZARD &bull; AUTO-BRAKE ENGAGED
+                </div>
+              </div>
+
+              <!-- Pose & Odometry Card -->
+              <div class="map-stat-card">
+                <div class="card-title">ROBOT ODOMETRY &amp; HEADING</div>
+                <div class="stat-kv-list">
+                  <div class="stat-kv">
+                    <span class="k">X POSITION:</span>
+                    <span class="v mono" id="tabPoseX">0.00 m</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">Y POSITION:</span>
+                    <span class="v mono" id="tabPoseY">0.00 m</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">HEADING (YAW):</span>
+                    <span class="v mono" id="tabPoseYaw">0.0&deg;</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">TRAIL POINTS:</span>
+                    <span class="v mono" id="tabTrailCount">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Room Dimension Estimation Card -->
+              <div class="map-stat-card">
+                <div class="card-title">ROOM DIMENSION ESTIMATE</div>
+                <div class="stat-kv-list">
+                  <div class="stat-kv">
+                    <span class="k">MAPPED OBSTACLES:</span>
+                    <span class="v mono" id="tabObstaclesCount">0 pts</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">ESTIMATED WIDTH:</span>
+                    <span class="v mono" id="tabRoomWidth">-- m</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">ESTIMATED LENGTH:</span>
+                    <span class="v mono" id="tabRoomLength">-- m</span>
+                  </div>
+                  <div class="stat-kv">
+                    <span class="k">GRID RESOLUTION:</span>
+                    <span class="v mono">4 cm (0.04m)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Instruction -->
+              <div class="map-help-card">
+                <div class="help-title">HOW 2D MAPPING WORKS</div>
+                <p>Drive the rover around the room using <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the on-screen joystick. The front ToF sensor scans distances 10 times a second and continuously projects obstacle surfaces onto the room coordinate map using chassis odometry and yaw attitude.</p>
+              </div>
             </div>
           </div>
         </div>
