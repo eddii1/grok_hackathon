@@ -1,6 +1,6 @@
-<h1 align="center">SEEK</h1>
+<h1 align="center">SEEK - Autonomous AI-powered devices</h1>
 <p align="center"><b>Give it a mission. Let it act.</b><br>
-Autonomous AI-powered devices: tell a drone and a ground rover what to find in plain language, and Grok plans every move.</p>
+Tell a drone and a ground rover what to find in plain language, and Grok plans every move.</p>
 
 <p align="center">
   <img src="docs/media/seek-run.gif" alt="SEEK multi-device run: drone and rover search the room at the same time" width="860">
