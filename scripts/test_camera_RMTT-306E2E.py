@@ -30,6 +30,8 @@ def main():
     print(f"{'=' * 60}\n")
 
     tello = Tello(host=drone_ip, retry_count=3)
+    writer = None
+    video_path = None
     try:
         tello.connect(wait_for_state=False)
 
@@ -53,9 +55,13 @@ def main():
         print("  * Live video window is now visible on your screen.")
         print("  * Press 'q' or 'ESC' on the window to close.")
         print("  * Press 's' to save a snapshot photo.")
+        print("  * Press 'v' to start or stop a video recording.")
         print("=" * 60 + "\n")
 
         snapshot_idx = 0
+        video_idx = 0
+        writer = None
+        video_path = None
         fps_time = time.time()
         fps_counter = 0
         fps = 0
@@ -70,10 +76,13 @@ def main():
                     fps_time = time.time()
 
                 display = frame.copy()
+                if writer is not None:
+                    writer.write(frame)
+                rec = "REC" if writer is not None else ""
                 # Telemetry overlay
                 cv2.putText(
                     display,
-                    f"RoboMaster TT Live | Bat: {bat}% | FPS: {fps}",
+                    f"RoboMaster TT Live | Bat: {bat}% | FPS: {fps} {rec}",
                     (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.8,
@@ -82,7 +91,7 @@ def main():
                 )
                 cv2.putText(
                     display,
-                    "[q]: Exit | [s]: Snapshot",
+                    "[q]: Exit | [s]: Snapshot | [v]: Video",
                     (20, display.shape[0] - 20),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.6,
@@ -100,12 +109,31 @@ def main():
                 filename = f"RMTT-306E2E_capture_{snapshot_idx}.jpg"
                 cv2.imwrite(filename, frame)
                 print(f"[Snapshot] Saved {filename}")
+            elif key == ord("v") and frame is not None:
+                if writer is None:
+                    video_idx += 1
+                    video_path = f"RMTT-306E2E_video_{video_idx}.mp4"
+                    height, width = frame.shape[:2]
+                    writer = cv2.VideoWriter(
+                        video_path,
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        15.0,
+                        (width, height),
+                    )
+                    print(f"[Video] Recording {video_path}")
+                else:
+                    writer.release()
+                    writer = None
+                    print(f"[Video] Saved {video_path}")
 
     except KeyboardInterrupt:
         print("\nStopping camera stream...")
     except Exception as e:
         print(f"\n[!] Camera error: {e}")
     finally:
+        if writer is not None:
+            writer.release()
+            print(f"[Video] Saved {video_path}")
         try:
             tello.streamoff()
         except Exception:

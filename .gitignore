@@ -1,5 +1,6 @@
 .env
 .env.*
+credential.txt
 !.env.example
 .DS_Store
 __pycache__/
@@ -7,3 +8,5 @@ __pycache__/
 .venv/
 scripts/.drone-ip
 scripts/.drone-ip-RMTT-306E2E
+captures/
+models/

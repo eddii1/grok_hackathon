@@ -204,6 +204,8 @@ def stream_camera(drone_ip):
 
     print(f"\n>>> Connecting to drone at {drone_ip} for camera feed...")
     tello = Tello(host=drone_ip, retry_count=2)
+    writer = None
+    video_path = None
     try:
         tello.connect(wait_for_state=False)
         print(">>> Starting video stream ('streamon')...")
@@ -215,6 +217,7 @@ def stream_camera(drone_ip):
         print("  * Showing live camera feed from RoboMaster TT")
         print("  * Press 'q' or 'ESC' on the video window to stop.")
         print("  * Press 's' to take a snapshot photo.")
+        print("  * Press 'v' to start or stop a video recording.")
         print("=" * 60 + "\n")
 
         window_name = f"RoboMaster TT - Live Camera ({drone_ip})"
@@ -222,12 +225,17 @@ def stream_camera(drone_ip):
         cv2.resizeWindow(window_name, 960, 720)
 
         snapshot_count = 0
+        video_idx = 0
+        writer = None
+        video_path = None
         last_frame_time = time.time()
         while True:
             frame = frame_reader.frame
             if frame is not None and frame.size > 0:
                 last_frame_time = time.time()
                 display_frame = frame.copy()
+                if writer is not None:
+                    writer.write(frame)
                 # Telemetry header overlay
                 cv2.putText(
                     display_frame,
@@ -249,6 +257,22 @@ def stream_camera(drone_ip):
                 fn = f"snapshot_{snapshot_count}.jpg"
                 cv2.imwrite(fn, frame)
                 print(f"[Snapshot] Saved {fn}")
+            elif key == ord("v") and frame is not None:
+                if writer is None:
+                    video_idx += 1
+                    video_path = f"RMTT-306E2E_video_{video_idx}.mp4"
+                    height, width = frame.shape[:2]
+                    writer = cv2.VideoWriter(
+                        video_path,
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        15.0,
+                        (width, height),
+                    )
+                    print(f"[Video] Recording {video_path}")
+                else:
+                    writer.release()
+                    writer = None
+                    print(f"[Video] Saved {video_path}")
 
             # Safety check if stream froze for >10s
             if time.time() - last_frame_time > 10.0:
@@ -259,6 +283,9 @@ def stream_camera(drone_ip):
     except Exception as e:
         print(f"[!] Camera stream error: {e}")
     finally:
+        if writer is not None:
+            writer.release()
+            print(f"[Video] Saved {video_path}")
         try:
             tello.streamoff()
         except Exception:

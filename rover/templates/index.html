@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DJI RoboMaster EP Rover — Mission Command</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- TOP NAVIGATION & STATUS BAR -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+            <circle cx="6" cy="18" r="3"></circle>
+            <circle cx="18" cy="18" r="3"></circle>
+            <path d="M12 6V2"></path>
+            <path d="M8 2h8"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>ROBOMASTER EP <span>// ROVER DASHBOARD</span></h1>
+          <p class="sub">FLEET COMMAND &bull; LIVE TELEMETRY</p>
+        </div>
+      </div>
+
+      <div class="nav-metrics">
+        <!-- Wi-Fi Network -->
+        <div class="metric-pill">
+          <span class="label">WI-FI</span>
+          <span class="value" id="wifiSsid">Samsung</span>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="metric-pill status-pill" id="connStatusPill">
+          <span class="indicator-dot" id="statusDot"></span>
+          <span class="value" id="statusText">DISCONNECTED</span>
+        </div>
+
+        <!-- IP Address -->
+        <div class="metric-pill">
+          <span class="label">IP</span>
+          <span class="value mono" id="roverIp">--.---.---.---</span>
+        </div>
+
+        <!-- Battery -->
+        <div class="metric-pill battery-pill">
+          <span class="label">BATTERY</span>
+          <div class="battery-bar-wrap">
+            <div class="battery-bar-fill" id="batteryBar" style="width: 100%;"></div>
+          </div>
+          <span class="value mono" id="batteryText">100%</span>
+        </div>
+
+        <!-- Live Recording Indicator -->
+        <div class="metric-pill rec-pill" id="recPill" style="display: none;">
+          <span class="rec-dot"></span>
+          <span class="label">REC</span>
+          <span class="value mono" id="recTimer">00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main class="dashboard-grid">
+      <!-- LEFT COLUMN: VIDEO FEED & CAMERA CONTROLS -->
+      <section class="video-section card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="badge">CAM-01</span>
+            <h2>PRIMARY OPTICAL SENSOR</h2>
+          </div>
+          <div class="header-tags">
+            <span class="tag">720P HD</span>
+            <span class="tag" id="fpsTag">30 FPS</span>
+            <span class="tag live-tag">LIVE FEED</span>
+          </div>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+          <img id="videoFeed" src="/video_feed" alt="Rover Live Stream">
+          
+          <!-- Tactical HUD Overlay -->
+          <div class="hud-overlay">
+            <div class="hud-corner top-left">
+              <span>FOV: 120&deg;</span>
+              <span>RES: 1280x720</span>
+            </div>
+            <div class="hud-corner top-right">
+              <span id="hudTimestamp">2026-11-04 00:00:00</span>
+              <span id="hudRecordingTag" class="hud-rec" style="display: none;">[RECORDING ACTIVE]</span>
+            </div>
+            <div class="hud-crosshair">
+              <div class="crosshair-circle"></div>
+              <div class="crosshair-line h-left"></div>
+              <div class="crosshair-line h-right"></div>
+              <div class="crosshair-line v-top"></div>
+              <div class="crosshair-line v-bottom"></div>
+            </div>
+            <div class="hud-corner bottom-left">
+              <span>LATENCY: &lt;45ms</span>
+              <span id="hudSpeeds">VX: 0.0 | VY: 0.0 | VZ: 0.0</span>
+            </div>
+            <div class="hud-corner bottom-right">
+              <span>MECANUM DRIVE</span>
+              <span>EP ROBOTIC ARM</span>
+            </div>
+          </div>
+
+          <!-- Flash Overlay for photo capture -->
+          <div class="camera-flash" id="cameraFlash"></div>
+        </div>
+
+        <!-- Action Toolbar -->
+        <div class="video-toolbar">
+          <div class="btn-group primary-actions">
+            <!-- Capture Snapshot -->
+            <button class="btn btn-primary" id="btnCapture">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+              <span>CAPTURE SNAPSHOT</span>
+            </button>
+
+            <!-- Start/Stop Recording -->
+            <button class="btn btn-record" id="btnRecord">
+              <span class="record-symbol"></span>
+              <span id="recordBtnLabel">START RECORDING</span>
+            </button>
+          </div>
+
+          <div class="btn-group secondary-actions">
+            <!-- Fullscreen -->
+            <button class="btn btn-secondary" id="btnFullscreen" title="Fullscreen Video">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+              </svg>
+            </button>
+
+            <!-- Emergency Stop -->
+            <button class="btn btn-danger" id="btnEmergencyStop" title="Emergency Stop Chassis">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                <rect x="6" y="6" width="12" height="12"></rect>
+              </svg>
+              <span>STOP ALL</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: VIRTUAL REMOTE CONTROLLER -->
+      <section class="controls-section card">
+        <div class="card-header">
+          <div class="header-title">
+            <span class="badge">REMOTE-01</span>
+            <h2>VIRTUAL FLIGHT &amp; DRIVE REMOTE</h2>
+          </div>
+          <div class="header-toggle">
+            <label class="switch-wrap">
+              <input type="checkbox" id="kbToggle" checked>
+              <span class="switch-slider"></span>
+              <span class="switch-label">KEYBOARD</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="remote-body">
+          <!-- CHASSIS SECTION -->
+          <div class="control-panel">
+            <div class="panel-heading">
+              <h3>OMNI-DIRECTIONAL CHASSIS</h3>
+              <span class="panel-subtitle">MECANUM 4WD VELOCITY</span>
+            </div>
+
+            <!-- Virtual D-PAD / Omnidirectional Pad -->
+            <div class="dpad-container">
+              <div class="dpad-grid">
+                <!-- Diagonal Left-Forward -->
+                <button class="dpad-btn diag-btn" data-vx="0.4" data-vy="-0.4" data-vz="0" title="Diagonal Forward-Left">
+                  &#8598;
+                </button>
+                <!-- Forward -->
+                <button class="dpad-btn primary-dir" id="btnFwd" data-vx="0.5" data-vy="0" data-vz="0" title="Forward (W)">
+                  <span class="key-hint">W</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12,4 4,18 20,18"/></svg>
+                </button>
+                <!-- Diagonal Right-Forward -->
+                <button class="dpad-btn diag-btn" data-vx="0.4" data-vy="0.4" data-vz="0" title="Diagonal Forward-Right">
+                  &#8599;
+                </button>
+
+                <!-- Strafe Left -->
+                <button class="dpad-btn primary-dir" id="btnLeft" data-vx="0" data-vy="-0.5" data-vz="0" title="Strafe Left (A)">
+                  <span class="key-hint">A</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,12 18,4 18,20"/></svg>
+                </button>
+                <!-- Stop Center -->
+                <button class="dpad-btn center-stop" id="btnStop" data-vx="0" data-vy="0" data-vz="0" title="Stop (Space)">
+                  <span class="key-hint">SPACE</span>
+                  <div class="stop-box"></div>
+                </button>
+                <!-- Strafe Right -->
+                <button class="dpad-btn primary-dir" id="btnRight" data-vx="0" data-vy="0.5" data-vz="0" title="Strafe Right (D)">
+                  <span class="key-hint">D</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="20,12 6,4 6,20"/></svg>
+                </button>
+
+                <!-- Rotate Left -->
+                <button class="dpad-btn rotate-btn" id="btnRotLeft" data-vx="0" data-vy="0" data-vz="-45" title="Rotate Left (Q)">
+                  <span class="key-hint">Q</span>
+                  &#8634;
+                </button>
+                <!-- Backward -->
+                <button class="dpad-btn primary-dir" id="btnBack" data-vx="-0.5" data-vy="0" data-vz="0" title="Backward (S)">
+                  <span class="key-hint">S</span>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12,20 4,6 20,6"/></svg>
+                </button>
+                <!-- Rotate Right -->
+                <button class="dpad-btn rotate-btn" id="btnRotRight" data-vx="0" data-vy="0" data-vz="45" title="Rotate Right (E)">
+                  <span class="key-hint">E</span>
+                  &#8635;
+                </button>
+              </div>
+            </div>
+
+            <!-- Speed Sliders -->
+            <div class="sliders-wrap">
+              <div class="slider-row">
+                <div class="slider-meta">
+                  <span class="slider-name">DRIVE SPEED</span>
+                  <span class="slider-val" id="driveSpeedVal">0.5 m/s</span>
+                </div>
+                <input type="range" id="driveSpeedRange" min="0.1" max="1.5" step="0.1" value="0.5">
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-meta">
+                  <span class="slider-name">TURN SPEED</span>
+                  <span class="slider-val" id="turnSpeedVal">45 &deg;/s</span>
+                </div>
+                <input type="range" id="turnSpeedRange" min="15" max="180" step="5" value="45">
+              </div>
+            </div>
+          </div>
+
+          <!-- ROBOTIC ARM & GRIPPER SECTION -->
+          <div class="control-panel">
+            <div class="panel-heading">
+              <h3>ROBOTIC ARM &amp; GRIPPER</h3>
+              <span class="panel-subtitle" id="armStatusSubtitle">MANIPULATOR &bull; 2-AXIS + CLAW</span>
+            </div>
+
+            <div class="arm-gripper-grid">
+              <!-- Arm Controls -->
+              <div class="sub-ctrl-box">
+                <span class="box-title">ARM POSITION</span>
+                <div class="arm-buttons">
+                  <button class="btn btn-ctrl" id="btnArmUp" data-x="0" data-y="20" title="Arm Pitch Up">
+                    <span>&#9650; UP</span>
+                  </button>
+                  <div class="arm-h-row">
+                    <button class="btn btn-ctrl" id="btnArmBack" data-x="-20" data-y="0" title="Arm Retract">
+                      <span>&#9664; RETRACT</span>
+                    </button>
+                    <button class="btn btn-ctrl btn-recenter" id="btnArmRecenter" title="Arm Reset">
+                      <span>HOME</span>
+                    </button>
+                    <button class="btn btn-ctrl" id="btnArmFwd" data-x="20" data-y="0" title="Arm Extend">
+                      <span>EXTEND &#9654;</span>
+                    </button>
+                  </div>
+                  <button class="btn btn-ctrl" id="btnArmDown" data-x="0" data-y="-20" title="Arm Pitch Down">
+                    <span>&#9660; DOWN</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Gripper Controls -->
+              <div class="sub-ctrl-box">
+                <span class="box-title">CLAW GRIPPER</span>
+                <div class="gripper-buttons">
+                  <button class="btn btn-ctrl btn-gripper-open" id="btnGripperOpen" data-action="open">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                      <path d="M8 3v3a6 6 0 0 1 12 0V3"></path>
+                      <path d="M4 17h16"></path>
+                    </svg>
+                    <span>OPEN GRIPPER</span>
+                  </button>
+
+                  <button class="btn btn-ctrl btn-gripper-close" id="btnGripperClose" data-action="close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                      <rect x="7" y="5" width="10" height="14" rx="2"></rect>
+                    </svg>
+                    <span>CLOSE GRIPPER</span>
+                  </button>
+
+                  <button class="btn btn-ctrl" id="btnGripperPause" data-action="pause">
+                    <span>PAUSE MOTOR</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- BOTTOM SECTION: TABS (WIFI SETUP / MEDIA GALLERY / SYSTEM LOGS) -->
+    <section class="bottom-tabs card">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="tabWifi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+          <span>WI-FI PAIRING ASSISTANT (Samsung)</span>
+        </button>
+
+        <button class="tab-btn" data-tab="tabMedia">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+          <span>MEDIA GALLERY (rover/media)</span>
+          <span class="pill-badge" id="mediaCountBadge">0</span>
+        </button>
+
+        <button class="tab-btn" data-tab="tabLogs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="tab-icon">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          <span>SYSTEM LOGS &amp; SHORTCUTS</span>
+        </button>
+      </div>
+
+      <div class="tabs-body">
+        <!-- TAB 1: WI-FI SETUP -->
+        <div class="tab-pane active" id="tabWifi">
+          <div class="wifi-setup-grid">
+            <!-- QR Code Card -->
+            <div class="qr-display-box">
+              <div class="qr-frame">
+                <img id="qrCodeImg" src="/api/wifi/qr" alt="RoboMaster Samsung Wi-Fi QR Code">
+              </div>
+              <div class="qr-meta">
+                <span class="qr-title">ROBOMASTER EP CONFIG CODE</span>
+                <span class="qr-creds">SSID: <strong>Samsung</strong> | PASS: <strong>12345678m</strong></span>
+                <a href="/api/wifi/qr" target="_blank" class="link-btn">Open Full QR Image</a>
+              </div>
+            </div>
+
+            <!-- Instructions & Actions -->
+            <div class="wifi-instructions">
+              <h3>CONNECTING ROVER TO SAMSUNG HOTSPOT:</h3>
+              <ol class="step-list">
+                <li>
+                  <div class="step-num">1</div>
+                  <div class="step-text">
+                    <strong>Power ON</strong> the RoboMaster EP rover.
+                  </div>
+                </li>
+                <li>
+                  <div class="step-num">2</div>
+                  <div class="step-text">
+                    Slide the connection switch on the intelligent controller to <strong>Router Mode</strong> (the icon showing networked nodes, <em>not</em> the direct Wi-Fi phone icon).
+                  </div>
+                </li>
+                <li>
+                  <div class="step-num">3</div>
+                  <div class="step-text">
+                    Point the rover's front camera directly at the <strong>QR code on the left</strong>.
+                  </div>
+                </li>
+                <li>
+                  <div class="step-num">4</div>
+                  <div class="step-text">
+                    <strong>Press the small connection button</strong> next to the switch once. You will hear the rover chime as it connects to <em>Samsung</em>!
+                  </div>
+                </li>
+              </ol>
+
+              <div class="wifi-action-bar">
+                <button class="btn btn-primary" id="btnAutoConnect">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span>AUTO-DISCOVER &amp; CONNECT</span>
+                </button>
+
+                <button class="btn btn-secondary" id="btnUsbConnect" style="background: rgba(0, 240, 255, 0.15); border-color: var(--accent-cyan); color: #fff;" title="Connect directly via USB Cable (RNDIS)">
+                  <span>🔌 CONNECT VIA USB (RNDIS)</span>
+                </button>
+
+                <div class="manual-ip-wrap">
+                  <input type="text" id="manualIpInput" placeholder="10.37.75.x or 192.168.2.1">
+                  <button class="btn btn-secondary" id="btnManualConnect">CONNECT IP</button>
+                </div>
+
+                <button class="btn btn-danger" id="btnDisconnect">DISCONNECT</button>
+              </div>
+
+              <div class="wifi-status-alert" id="wifiStatusAlert">
+                Status: Ready. Waiting for rover connection...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: MEDIA GALLERY -->
+        <div class="tab-pane" id="tabMedia">
+          <div class="gallery-toolbar">
+            <div class="gallery-filters">
+              <button class="filter-btn active" data-filter="all">ALL FILES</button>
+              <button class="filter-btn" data-filter="image">PHOTOS</button>
+              <button class="filter-btn" data-filter="video">VIDEOS</button>
+            </div>
+            <div class="gallery-meta">
+              <span id="galleryStats">0 files (0 MB)</span>
+              <button class="btn btn-secondary btn-sm" id="btnRefreshGallery">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>REFRESH</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="media-grid" id="mediaGrid">
+            <!-- Dynamically populated -->
+            <div class="empty-state">No media captured yet. Use the Capture Snapshot or Start Recording buttons above!</div>
+          </div>
+        </div>
+
+        <!-- TAB 3: SYSTEM LOGS -->
+        <div class="tab-pane" id="tabLogs">
+          <div class="logs-grid">
+            <div class="log-console-box">
+              <div class="console-header">
+                <span>TERMINAL LOGS</span>
+                <button class="btn-text" id="btnClearLogs">Clear</button>
+              </div>
+              <div class="log-stream" id="logStream">
+                <div class="log-line info">[SYSTEM] Dashboard initialized. Target network: Samsung.</div>
+              </div>
+            </div>
+
+            <div class="cheatsheet-box">
+              <h4>KEYBOARD SHORTCUTS</h4>
+              <ul class="shortcut-list">
+                <li><kbd>W</kbd> / <kbd>S</kbd> : Drive Forward / Backward</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> : Strafe Left / Strafe Right</li>
+                <li><kbd>Q</kbd> / <kbd>E</kbd> : Rotate Left / Rotate Right</li>
+                <li><kbd>Space</kbd> : Emergency Stop Chassis</li>
+                <li><kbd>C</kbd> : Capture Snapshot</li>
+                <li><kbd>R</kbd> : Toggle Video Recording</li>
+                <li><kbd>F</kbd> : Toggle Fullscreen</li>
+                <li><kbd>O</kbd> / <kbd>P</kbd> : Open / Close Gripper</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- MEDIA PREVIEW MODAL -->
+  <div class="modal-backdrop" id="mediaModal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">File Preview</h3>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Render image or video -->
+      </div>
+      <div class="modal-footer">
+        <a href="#" download id="modalDownloadBtn" class="btn btn-primary">DOWNLOAD</a>
+        <button id="modalDeleteBtn" class="btn btn-danger">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
+

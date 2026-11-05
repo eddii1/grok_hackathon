@@ -139,6 +139,10 @@ def live_broadcast(local_ip, drone_ip):
 
     SNAPSHOT_DIR.mkdir(exist_ok=True)
     snapshot_idx = 0
+    video_idx = 0
+    writer = None
+    video_path = None
+    img = None
     fps_time = time.time()
     fps_counter = 0
     fps = 0
@@ -147,6 +151,7 @@ def live_broadcast(local_ip, drone_ip):
     print("LIVE CAMERA WINDOW IS OPEN!")
     print("  * Press 'q' or 'ESC' in the window to quit.")
     print("  * Press 's' to capture a snapshot image.")
+    print("  * Press 'v' to start or stop a video recording.")
     print("=" * 65 + "\n", flush=True)
 
     try:
@@ -168,11 +173,13 @@ def live_broadcast(local_ip, drone_ip):
                             fps_time = time.time()
 
                         img = frame.to_ndarray(format="bgr24")
+                        if writer is not None:
+                            writer.write(img)
 
-                        # Telemetry overlay
+                        rec = "REC" if writer is not None else ""
                         cv2.putText(
                             img,
-                            f"RoboMaster TT Live | Bat: {bat}% | FPS: {fps}",
+                            f"RoboMaster TT Live | Bat: {bat}% | FPS: {fps} {rec}",
                             (20, 35),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
@@ -181,7 +188,7 @@ def live_broadcast(local_ip, drone_ip):
                         )
                         cv2.putText(
                             img,
-                            "[q]: Exit | [s]: Snapshot",
+                            "[q]: Exit | [s]: Snapshot | [v]: Video",
                             (20, img.shape[0] - 20),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
@@ -197,15 +204,34 @@ def live_broadcast(local_ip, drone_ip):
             if key == ord("q") or key == 27:
                 print("Exit requested by user.", flush=True)
                 break
-            elif key == ord("s"):
+            elif key == ord("s") and img is not None:
                 snapshot_idx += 1
                 fn = SNAPSHOT_DIR / f"RMTT-306E2E_snapshot_{snapshot_idx}.jpg"
                 cv2.imwrite(str(fn), img)
                 print(f"[Snapshot] Saved to {fn}", flush=True)
+            elif key == ord("v") and img is not None:
+                if writer is None:
+                    video_idx += 1
+                    video_path = SNAPSHOT_DIR / f"RMTT-306E2E_video_{video_idx}.mp4"
+                    height, width = img.shape[:2]
+                    writer = cv2.VideoWriter(
+                        str(video_path),
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        15.0,
+                        (width, height),
+                    )
+                    print(f"[Video] Recording {video_path}", flush=True)
+                else:
+                    writer.release()
+                    writer = None
+                    print(f"[Video] Saved {video_path}", flush=True)
 
     except KeyboardInterrupt:
         print("\nStopping live broadcast...", flush=True)
     finally:
+        if writer is not None:
+            writer.release()
+            print(f"[Video] Saved {video_path}", flush=True)
         try:
             send_cmd(cmd_sock, drone_ip, "streamoff", timeout=2.0)
         except Exception:

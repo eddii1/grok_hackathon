@@ -5,8 +5,8 @@ import sys
 
 DRONE = "192.168.10.1"
 PORT = 8889
-SSID = "TEAM"
-PASSWORD = "12345678"
+SSID = "Samsung"
+PASSWORD = "12345678m"
 DRONE_CODE = "TELLO-99484E"
 
 
@@ -14,9 +14,10 @@ def main():
     local_ip = sys.argv[1] if len(sys.argv) > 1 else "192.168.10.2"
     print(f"Connecting to {DRONE_CODE} from local IP: {local_ip}...", flush=True)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         sock.bind((local_ip, 0))
-    except Exception:
+    except OSError:
         sock.bind(("", 0))
 
     def send(cmd, timeout, label=None):

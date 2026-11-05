@@ -95,33 +95,37 @@ def live_broadcast(local_ip, drone_ip):
     print(f"{'=' * 65}\n", flush=True)
 
     cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    cmd_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Tello answers the sender port. Port 8889 is the one the SDK samples use.
     try:
+        cmd_sock.bind((local_ip, CMD_PORT))
+    except OSError:
         cmd_sock.bind((local_ip, 0))
-    except Exception:
-        cmd_sock.bind(("", 0))
+    print(f"Command socket {cmd_sock.getsockname()} -> {drone_ip}:{CMD_PORT}", flush=True)
+
+    # Enter SDK mode before opening the video port.
+    ready = False
+    for attempt in range(1, 9):
+        reply = send_cmd(cmd_sock, drone_ip, "command", timeout=2.0)
+        if "ok" in reply.lower() and "error" not in reply.lower():
+            ready = True
+            break
+        time.sleep(0.4)
+
+    if not ready:
+        print(f"[!] Failed to enter SDK mode on {DRONE_CODE} ({drone_ip}).", flush=True)
+        print("    Power-cycle the drone, wait until the light is steady, and", flush=True)
+        print("    keep only this laptop on its Wi-Fi. Then run this again.", flush=True)
+        cmd_sock.close()
+        return 1
 
     video_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     video_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         video_sock.bind((local_ip, VIDEO_PORT))
-    except Exception:
+    except OSError:
         video_sock.bind(("", VIDEO_PORT))
     video_sock.settimeout(1.0)
-
-    # Enter SDK mode
-    ready = False
-    for attempt in range(1, 6):
-        reply = send_cmd(cmd_sock, drone_ip, "command", timeout=2.5)
-        if "ok" in reply.lower():
-            ready = True
-            break
-        time.sleep(0.3)
-
-    if not ready:
-        print(f"[!] Failed to enter SDK mode on {DRONE_CODE} ({drone_ip}).", flush=True)
-        video_sock.close()
-        cmd_sock.close()
-        return 1
 
     bat = send_cmd(cmd_sock, drone_ip, "battery?", timeout=1.5) or "N/A"
     print(f"Drone Battery: {bat}%\n", flush=True)
@@ -136,6 +140,10 @@ def live_broadcast(local_ip, drone_ip):
 
     SNAPSHOT_DIR.mkdir(exist_ok=True)
     snapshot_idx = 0
+    video_idx = 0
+    writer = None
+    video_path = None
+    img = None
     fps_time = time.time()
     fps_counter = 0
     fps = 0
@@ -144,7 +152,8 @@ def live_broadcast(local_ip, drone_ip):
     print("LIVE BROADCASTING WINDOW ACTIVE")
     print(f"  * Showing video stream from {DRONE_CODE}")
     print("  * Press 'q' or 'ESC' in the window to quit.")
-    print("  * Press 's' to save snapshot image.")
+    print("  * Press 's' to save a snapshot image.")
+    print("  * Press 'v' to start or stop a video recording.")
     print("=" * 65 + "\n", flush=True)
 
     try:
@@ -166,10 +175,13 @@ def live_broadcast(local_ip, drone_ip):
                             fps_time = time.time()
 
                         img = frame.to_ndarray(format="bgr24")
+                        if writer is not None:
+                            writer.write(img)
 
+                        rec = "REC" if writer is not None else ""
                         cv2.putText(
                             img,
-                            f"{DRONE_CODE} Live | Bat: {bat}% | FPS: {fps}",
+                            f"{DRONE_CODE} Live | Bat: {bat}% | FPS: {fps} {rec}",
                             (20, 35),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
@@ -178,7 +190,7 @@ def live_broadcast(local_ip, drone_ip):
                         )
                         cv2.putText(
                             img,
-                            "[q]: Exit | [s]: Snapshot",
+                            "[q]: Exit | [s]: Snapshot | [v]: Video",
                             (20, img.shape[0] - 20),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
@@ -194,15 +206,34 @@ def live_broadcast(local_ip, drone_ip):
             if key == ord("q") or key == 27:
                 print("Exit requested by user.", flush=True)
                 break
-            elif key == ord("s"):
+            elif key == ord("s") and img is not None:
                 snapshot_idx += 1
                 fn = SNAPSHOT_DIR / f"{DRONE_CODE}_snapshot_{snapshot_idx}.jpg"
                 cv2.imwrite(str(fn), img)
                 print(f"[Snapshot] Saved to {fn}", flush=True)
+            elif key == ord("v") and img is not None:
+                if writer is None:
+                    video_idx += 1
+                    video_path = SNAPSHOT_DIR / f"{DRONE_CODE}_video_{video_idx}.mp4"
+                    height, width = img.shape[:2]
+                    writer = cv2.VideoWriter(
+                        str(video_path),
+                        cv2.VideoWriter_fourcc(*"mp4v"),
+                        15.0,
+                        (width, height),
+                    )
+                    print(f"[Video] Recording {video_path}", flush=True)
+                else:
+                    writer.release()
+                    writer = None
+                    print(f"[Video] Saved {video_path}", flush=True)
 
     except KeyboardInterrupt:
         print("\nStopping camera stream...", flush=True)
     finally:
+        if writer is not None:
+            writer.release()
+            print(f"[Video] Saved {video_path}", flush=True)
         try:
             send_cmd(cmd_sock, drone_ip, "streamoff", timeout=2.0)
         except Exception:
