@@ -17,12 +17,18 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+# Replace DJI's unsupported native decoder before loading any SDK camera modules.
+from rover.sdk_compat import install as install_sdk_compat
+install_sdk_compat()
+
 # Apply patch to robomaster config before importing robot/client
 import robomaster.config as rm_config
 if not hasattr(rm_config, "DEFAULT_CONN_PROTO"):
     rm_config.DEFAULT_CONN_PROTO = getattr(rm_config, "DEFAULT_PROTO_TYPE", 0)
 
 from robomaster import robot, conn, protocol, algo
+from rover.sdk_compat import patch_video
+patch_video()
 
 logger = logging.getLogger("RoverController")
 logging.basicConfig(level=logging.INFO)
@@ -238,8 +244,16 @@ class RoverController:
                     return res
         return None
 
-    def _get_local_wifi_ip(self):
-        """Returns the local IPv4 on Wi-Fi interface specifically."""
+    def _get_local_wifi_ip(self, target_ip=None):
+        """Use the OS route to the robot, including on macOS. UDP connect sends no packet."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                probe.connect((target_ip or self.rover_ip or "10.255.255.255", 40923))
+                ip = probe.getsockname()[0]
+                if ip != "0.0.0.0" and not ip.startswith(("127.", "169.254.")):
+                    return ip
+        except OSError:
+            pass
         try:
             import subprocess
             out = subprocess.check_output(
@@ -254,7 +268,7 @@ class RoverController:
                         return ip
         except Exception:
             pass
-        return "192.168.2.23"
+        return "0.0.0.0"  # no fabricated AP address: connection must report the missing route
 
     def _get_connected_wifi_ssid(self):
         """Returns the SSID of the currently connected Wi-Fi network."""
@@ -301,9 +315,14 @@ class RoverController:
             return True
 
         self.status = "CONNECTING"
-        wifi_ip = self._get_local_wifi_ip()
+        wifi_ip = self._get_local_wifi_ip(target_ip)
+        if wifi_ip == "0.0.0.0":
+            self.status = "ERROR"
+            self.status_msg = "No local route to rover. Join its hotspot/network and reconnect."
+            return False
+        rm_config.LOCAL_IP_STR = wifi_ip  # SDK control/video callbacks must use the reachable Mac address
 
-        if wifi_ip.startswith("192.168.2."):
+        if conn_type == "ap":
             conn_type = "ap"
             target_ip = "192.168.2.1"
             rm_config.ROBOT_IP_STR = None
@@ -439,9 +458,24 @@ class RoverController:
         logger.info("Live camera capture loop running.")
         time.sleep(0.4)  # Let video socket and H264 decoder thread initialize
         first_frame = False
+        reconnects = 0
         while self.stream_active and self.camera:
+            vconn = getattr(getattr(self.camera, "_liveview", None), "_video_stream_conn", None)
+            if vconn is not None and getattr(vconn, "eof", False):
+                if first_frame:
+                    reconnects, first_frame = 0, False  # stream had worked: fresh retry budget
+                if reconnects >= 5:
+                    self.capture_error = f"Video stream ended, gave up after 5 reconnects: {vconn.end_reason}"
+                    time.sleep(1.0)
+                    continue
+                reconnects += 1
+                logger.warning(f"{vconn.end_reason}; reconnecting video ({reconnects}/5)")
+                time.sleep(2.0)
+                self.restart_camera_stream()
+                time.sleep(0.4)
+                continue
             try:
-                img = self.camera.read_cv2_image(timeout=1.0, strategy="pipeline")
+                img = self.camera.read_cv2_image(timeout=1.0, strategy="newest")
                 if img is not None and img.size > 0:
                     bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
@@ -459,11 +493,15 @@ class RoverController:
                         with self.frame_lock:
                             self.latest_frame = bgr
                             self.latest_jpeg = jpeg.tobytes()
+                            self.frame_time = time.time()
                 else:
                     time.sleep(0.01)
             except queue.Empty:
                 time.sleep(0.01)
             except Exception as e:
+                if getattr(self, "capture_error", "") != str(e):
+                    logger.exception("Camera capture failed")
+                self.capture_error = str(e)
                 time.sleep(0.05)
         logger.info("Live camera capture loop stopped.")
 
@@ -483,7 +521,7 @@ class RoverController:
 
     def get_stream_frame(self):
         """Returns the latest JPEG frame or generates an active HUD standby frame."""
-        if self.status == "CONNECTED" and self.latest_jpeg is not None:
+        if self.status == "CONNECTED" and self.latest_jpeg is not None and time.time() - self.frame_time < 3.0:
             with self.frame_lock:
                 return self.latest_jpeg
 
@@ -764,6 +802,7 @@ class RoverController:
             x, y = float(pos[0]), float(pos[1])
             z = float(pos[2]) if len(pos) > 2 else 0.0
             self.robot_pos = {"x": x, "y": y, "z": z}
+            self.pose_time = time.time()
 
             with self.map_lock:
                 if not self.robot_trail:
@@ -780,6 +819,7 @@ class RoverController:
         """Receives chassis attitude: atti = (yaw, pitch, roll) in degrees."""
         if atti and len(atti) > 0:
             self.robot_yaw = round(float(atti[0]), 1)
+            self.attitude_time = time.time()
 
     def _process_distance_reading(self, dist):
         """

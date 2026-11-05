@@ -1,5 +1,20 @@
 This rover is the **DJI RoboMaster EP** (specifically configured with the robotic arm and gripper attachment, along with the **RoboMaster Education Expansion Intelligent Controller** shown in the first image).
 
+### Apple Silicon local bridge
+
+From the parent repo:
+
+```sh
+bash rover/setup_mac.sh
+rover/.venv/bin/python rover/app.py
+```
+
+This uses an isolated Python 3.12 environment, the official SDK at pinned revision
+`ff6646e115ab125af3207a4ed3df42cc76c795b2`, and `rover/sdk_compat.py` to replace the old
+native H.264 decoder with PyAV's ARM-compatible decoder. Audio is deliberately unsupported.
+The robot is not connected or moved by installation. Camera and hardware operation still require
+venue verification. Keep the phone controller closed while the desktop SDK owns the robot.
+
 ---
 
 ### How to Control It Programmatically

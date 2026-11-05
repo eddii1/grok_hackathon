@@ -12,3 +12,4 @@ captures/
 models/
 rover/media/*
 !rover/media/.gitkeep
+run/logs/

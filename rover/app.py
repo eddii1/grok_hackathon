@@ -61,6 +61,26 @@ def api_status():
     return jsonify(rover_ctrl.get_status())
 
 
+@app.route("/api/fleet")
+def api_fleet():
+    """Read-only fleet bridge. Acquisition timestamps, not HTTP response times, establish freshness."""
+    data = rover_ctrl.get_map_data()
+    data.update(status=rover_ctrl.status, frame_time=getattr(rover_ctrl, "frame_time", 0),
+                pose_time=getattr(rover_ctrl, "pose_time", 0),
+                attitude_time=getattr(rover_ctrl, "attitude_time", 0), server_time=time.time())
+    return jsonify(data)
+
+
+@app.route("/api/fleet/frame")
+def api_fleet_frame():
+    with rover_ctrl.frame_lock:
+        image = rover_ctrl.latest_jpeg
+        captured = getattr(rover_ctrl, "frame_time", 0)
+    if not image:
+        return jsonify(error="no camera frame"), 503
+    return Response(image, mimetype="image/jpeg", headers={"X-Captured-At": str(captured)})
+
+
 @app.route("/api/wifi/qr")
 def api_wifi_qr():
     """Returns the generated Samsung Wi-Fi QR code image."""
@@ -112,11 +132,24 @@ def api_debug_stream():
     if cam and hasattr(cam, "_liveview"):
         lv = cam._liveview
         res["video_streaming"] = getattr(lv, "_video_streaming", None)
+        thread = getattr(lv, "_video_decoder_thread", None)
+        res["decoder_thread_alive"] = bool(thread and thread.is_alive())
+        decoder = getattr(lv, "_video_decoder", None)
+        res["decoder_bytes_in"] = getattr(decoder, "bytes_in", None)
+        res["decoder_frames"] = getattr(decoder, "frames_decoded", None)
+        res["decoder_error"] = getattr(decoder, "last_error", "") or getattr(lv, "_decode_error", "")
+        res["capture_error"] = getattr(rover_ctrl, "capture_error", "")
         conn = getattr(lv, "_video_stream_conn", None)
         if conn:
             res["conn_receiving"] = getattr(conn, "_receiving", None)
             res["conn_recv_count"] = getattr(conn, "_recv_count", None)
             res["conn_sock"] = str(getattr(conn, "_sock", None))
+            res["conn_bytes_total"] = getattr(conn, "bytes_total", None)
+            res["conn_eof"] = getattr(conn, "eof", None)
+            res["conn_end_reason"] = getattr(conn, "end_reason", "")
+            last = getattr(conn, "last_data_at", 0) or 0
+            res["conn_last_data_age_s"] = round(time.time() - last, 1) if last else None
+        res["latest_frame_age_s"] = round(time.time() - rover_ctrl.frame_time, 1) if rover_ctrl.latest_jpeg else None
         q = getattr(lv, "_video_frame_queue", None)
         if q:
             res["video_queue_qsize"] = q.qsize()
@@ -271,11 +304,10 @@ def api_media_delete(filename):
 
 
 if __name__ == "__main__":
-    port = 5000
+    port = int(os.environ.get("ROVER_PORT", "5000"))
     print(f"\n=======================================================")
     print(f"  RoboMaster EP Rover Dashboard starting on:")
     print(f"  -> Local URL:   http://localhost:{port}")
     print(f"  -> Network URL: http://{rover_ctrl._get_local_wifi_ip()}:{port}")
     print(f"=======================================================\n")
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
-
