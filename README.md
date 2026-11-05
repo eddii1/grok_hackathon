@@ -1,4 +1,4 @@
-<h1 align="center">SEEK - Autonomous AI-powered devices</h1>
+<h1 align="center">SEEK: Autonomous AI-powered Devices</h1>
 <p align="center"><b>Give it a mission. Let it act.</b><br>
 Tell a drone and a ground rover what to find in plain language, and Grok plans every move.</p>
 
